@@ -35,6 +35,7 @@
 #include "linux/input.h"
 #include <sys/ioctl.h>
 
+#include <libevdev/libevdev.h>
 #include <libinput.h>
 
 #include "shared.h"
