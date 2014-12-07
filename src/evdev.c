@@ -23,6 +23,8 @@
 
 #include "config.h"
 
+#include <sys/stat.h>
+
 #include <errno.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -30,7 +32,9 @@
 #include "linux/input.h"
 #include <unistd.h>
 #include <fcntl.h>
+#ifdef __linux__
 #include <mtdev-plumbing.h>
+#endif
 #include <assert.h>
 #include <time.h>
 #include <math.h>
@@ -1207,6 +1211,7 @@ static inline void
 evdev_device_dispatch_one(struct evdev_device *device,
 			  struct input_event *ev)
 {
+#ifdef __linux__
 	if (!device->mtdev) {
 		evdev_process_event(device, ev);
 	} else {
@@ -1219,6 +1224,9 @@ evdev_device_dispatch_one(struct evdev_device *device,
 			}
 		}
 	}
+#else
+	evdev_process_event(device, ev);
+#endif
 }
 
 static int
@@ -1341,6 +1349,7 @@ evdev_device_init_pointer_acceleration(struct evdev_device *device,
 	return 0;
 }
 
+#ifdef __linux__
 static inline int
 evdev_need_mtdev(struct evdev_device *device)
 {
@@ -1350,6 +1359,7 @@ evdev_need_mtdev(struct evdev_device *device)
 		libevdev_has_event_code(evdev, EV_ABS, ABS_MT_POSITION_Y) &&
 		!libevdev_has_event_code(evdev, EV_ABS, ABS_MT_SLOT));
 }
+#endif
 
 static void
 evdev_tag_device(struct evdev_device *device)
@@ -2413,10 +2423,12 @@ evdev_device_suspend(struct evdev_device *device)
 
 	release_pressed_keys(device);
 
+#ifdef __linux__
 	if (device->mtdev) {
 		mtdev_close_delete(device->mtdev);
 		device->mtdev = NULL;
 	}
+#endif
 
 	if (device->fd != -1) {
 		close_restricted(device->base.seat->libinput, device->fd);
@@ -2455,11 +2467,13 @@ evdev_device_resume(struct evdev_device *device)
 
 	device->fd = fd;
 
+#ifdef __linux__
 	if (evdev_need_mtdev(device)) {
 		device->mtdev = mtdev_new_open(device->fd);
 		if (!device->mtdev)
 			return -ENODEV;
 	}
+#endif
 
 	libevdev_change_fd(device->evdev, fd);
 	libevdev_set_clock_id(device->evdev, CLOCK_MONOTONIC);
@@ -2478,7 +2492,9 @@ evdev_device_resume(struct evdev_device *device)
 	device->source =
 		libinput_add_fd(libinput, fd, evdev_device_dispatch, device);
 	if (!device->source) {
+#ifdef __linux__
 		mtdev_close_delete(device->mtdev);
+#endif
 		return -ENOMEM;
 	}
 

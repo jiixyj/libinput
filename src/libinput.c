@@ -26,7 +26,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __linux__
 #include <sys/epoll.h>
+#endif
 #include <unistd.h>
 #include <assert.h>
 
@@ -641,6 +643,7 @@ libinput_add_fd(struct libinput *libinput,
 		libinput_source_dispatch_t dispatch,
 		void *user_data)
 {
+#ifdef __linux__
 	struct libinput_source *source;
 	struct epoll_event ep;
 
@@ -662,15 +665,22 @@ libinput_add_fd(struct libinput *libinput,
 	}
 
 	return source;
+#else
+	return NULL;
+#endif
 }
 
 void
 libinput_remove_source(struct libinput *libinput,
 		       struct libinput_source *source)
 {
+#ifdef __linux__
 	epoll_ctl(libinput->epoll_fd, EPOLL_CTL_DEL, source->fd, NULL);
 	source->fd = -1;
 	list_insert(&libinput->source_destroy_list, &source->link);
+#else
+	return;
+#endif
 }
 
 int
@@ -679,6 +689,7 @@ libinput_init(struct libinput *libinput,
 	      const struct libinput_interface_backend *interface_backend,
 	      void *user_data)
 {
+#ifdef __linux__
 	libinput->epoll_fd = epoll_create1(EPOLL_CLOEXEC);;
 	if (libinput->epoll_fd < 0)
 		return -1;
@@ -706,6 +717,9 @@ libinput_init(struct libinput *libinput,
 	}
 
 	return 0;
+#else
+	return -1;
+#endif
 }
 
 static void
@@ -919,6 +933,7 @@ libinput_get_fd(struct libinput *libinput)
 LIBINPUT_EXPORT int
 libinput_dispatch(struct libinput *libinput)
 {
+#ifdef __linux__
 	struct libinput_source *source;
 	struct epoll_event ep[32];
 	int i, count;
@@ -938,6 +953,9 @@ libinput_dispatch(struct libinput *libinput)
 	libinput_drop_destroyed_sources(libinput);
 
 	return 0;
+#else
+	return -1;
+#endif
 }
 
 void

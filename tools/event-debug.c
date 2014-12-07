@@ -29,7 +29,9 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#ifdef __linux__
 #include <libudev.h>
+#endif
 #include "linux/input.h"
 #include <sys/ioctl.h>
 
