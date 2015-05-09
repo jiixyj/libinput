@@ -25,6 +25,8 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <stdio.h>
+#undef __nonnull
+#define __nonnull(...)
 #include <signal.h>
 #include <string.h>
 #include <time.h>

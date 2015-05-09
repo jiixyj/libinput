@@ -1711,6 +1711,7 @@ evdev_configure_mt_device(struct evdev_device *device)
 	/* We only handle the slotted Protocol B in libinput.
 	   Devices with ABS_MT_POSITION_* but not ABS_MT_SLOT
 	   require mtdev for conversion. */
+#ifdef __linux__
 	if (evdev_need_mtdev(device)) {
 		device->mtdev = mtdev_new_open(device->fd);
 		if (!device->mtdev)
@@ -1721,9 +1722,12 @@ evdev_configure_mt_device(struct evdev_device *device)
 		num_slots = 10;
 		active_slot = device->mtdev->caps.slot.value;
 	} else {
+#endif
 		num_slots = libevdev_get_num_slots(device->evdev);
 		active_slot = libevdev_get_current_slot(evdev);
+#ifdef __linux__
 	}
+#endif
 
 	slots = calloc(num_slots, sizeof(struct mt_slot));
 	if (!slots)

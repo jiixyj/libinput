@@ -29,8 +29,22 @@ char const *udev_device_get_devnode(struct udev_device *udev_device) {
 }
 
 LIBINPUT_EXPORT
-char const *udev_device_get_property_value(struct udev_device *dummy __unused, char const *property) {
+char const *udev_device_get_property_value(struct udev_device *dev, char const *property) {
   fprintf(stderr, "stub: udev_device_get_property_value %s\n", property);
+  if (strcmp("ID_INPUT", property) == 0) {
+    fprintf(stderr, "udev_device_get_property_value return 1\n");
+    return (char const *) 1;
+  }
+  if (strcmp(dev->sysname, "event0") == 0 &&
+      strcmp("ID_INPUT_TOUCHPAD", property) == 0) {
+    fprintf(stderr, "udev_device_get_property_value return 1\n");
+    return (char const *) 1;
+  }
+  if (strcmp(dev->sysname, "event1") == 0 &&
+      strcmp("ID_INPUT_MOUSE", property) == 0) {
+    fprintf(stderr, "udev_device_get_property_value return 1\n");
+    return (char const *) 1;
+  }
   return NULL;
 }
 
@@ -82,6 +96,20 @@ void udev_device_unref(struct udev_device *udev_device) {
   if (udev_device->refcount == 0) {
     free(udev_device);
   }
+}
+
+LIBINPUT_EXPORT
+struct udev_device *udev_device_get_parent(struct udev_device *udev_device) {
+  fprintf(stderr, "udev_device_get_parent %p %d\n", udev_device,
+          udev_device->refcount);
+  return NULL;
+}
+
+LIBINPUT_EXPORT
+int udev_device_get_is_initialized(struct udev_device *udev_device) {
+  fprintf(stderr, "udev_device_get_is_initialized %p %d\n", udev_device,
+          udev_device->refcount);
+  return 1;
 }
 
 LIBINPUT_EXPORT

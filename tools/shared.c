@@ -28,7 +28,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __linux__
 #include <libudev.h>
+#else
+#include "udev-stubs.h"
+#endif
 
 #include <libevdev/libevdev.h>
 
@@ -63,7 +67,7 @@ log_handler(struct libinput *li,
 }
 
 void
-tools_usage()
+tools_usage(const char *argv0)
 {
 	printf("Usage: %s [options] [--udev [<seat>]|--device /dev/input/event0]\n"
 	       "--udev <seat>.... Use udev device discovery (default).\n"
@@ -90,7 +94,7 @@ tools_usage()
 	       "Other options:\n"
 	       "--verbose ....... Print debugging output.\n"
 	       "--help .......... Print this help.\n",
-		program_invocation_short_name);
+		argv0);
 }
 
 void
@@ -142,12 +146,12 @@ tools_parse_args(int argc, char **argv, struct tools_options *options)
 		switch(c) {
 			case 'h': /* --help */
 			case OPT_HELP:
-				tools_usage();
+				tools_usage(argv[0]);
 				exit(0);
 			case OPT_DEVICE: /* --device */
 				options->backend = BACKEND_DEVICE;
 				if (!optarg) {
-					tools_usage();
+					tools_usage(argv[0]);
 					return 1;
 				}
 				options->device = optarg;
@@ -186,7 +190,7 @@ tools_parse_args(int argc, char **argv, struct tools_options *options)
 				break;
 			case OPT_CLICK_METHOD:
 				if (!optarg) {
-					tools_usage();
+					tools_usage(argv[0]);
 					return 1;
 				}
 				if (strcmp(optarg, "none") == 0) {
@@ -199,13 +203,13 @@ tools_parse_args(int argc, char **argv, struct tools_options *options)
 					options->click_method =
 						LIBINPUT_CONFIG_CLICK_METHOD_BUTTON_AREAS;
 				} else {
-					tools_usage();
+					tools_usage(argv[0]);
 					return 1;
 				}
 				break;
 			case OPT_SCROLL_METHOD:
 				if (!optarg) {
-					tools_usage();
+					tools_usage(argv[0]);
 					return 1;
 				}
 				if (strcmp(optarg, "none") == 0) {
@@ -221,13 +225,13 @@ tools_parse_args(int argc, char **argv, struct tools_options *options)
 					options->scroll_method =
 						LIBINPUT_CONFIG_SCROLL_ON_BUTTON_DOWN;
 				} else {
-					tools_usage();
+					tools_usage(argv[0]);
 					return 1;
 				}
 				break;
 			case OPT_SCROLL_BUTTON:
 				if (!optarg) {
-					tools_usage();
+					tools_usage(argv[0]);
 					return 1;
 				}
 				options->scroll_button =
@@ -242,20 +246,20 @@ tools_parse_args(int argc, char **argv, struct tools_options *options)
 				break;
 			case OPT_SPEED:
 				if (!optarg) {
-					tools_usage();
+					tools_usage(argv[0]);
 					return 1;
 				}
 				options->speed = atof(optarg);
 				break;
 			default:
-				tools_usage();
+				tools_usage(argv[0]);
 				return 1;
 		}
 
 	}
 
 	if (optind < argc) {
-		tools_usage();
+		tools_usage(argv[0]);
 		return 1;
 	}
 
