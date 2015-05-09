@@ -71,10 +71,10 @@ libinput_timer_arm_timer_fd(struct libinput *libinput)
 	uint64_t now = libinput_now(timer->libinput);
 	struct kevent chlist[3];
 	int nchanges = 0;
-	EV_SET(&chlist[nchanges++], 1, EVFILT_TIMER, EV_ADD, 0, 0, 0);
-	EV_SET(&chlist[nchanges++], 1, EVFILT_TIMER, EV_DELETE, 0, 0, 0);
+	EV_SET(&chlist[nchanges++], (uintptr_t) libinput, EVFILT_TIMER, EV_ADD, 0, 0, 0);
+	EV_SET(&chlist[nchanges++], (uintptr_t) libinput, EVFILT_TIMER, EV_DELETE, 0, 0, 0);
 	if (earliest_expire != UINT64_MAX) {
-		EV_SET(&chlist[nchanges++], 1, EVFILT_TIMER,
+		EV_SET(&chlist[nchanges++], (uintptr_t) libinput, EVFILT_TIMER,
 		       EV_ADD | EV_ONESHOT, 0,
 		       earliest_expire >= now ? earliest_expire - now : 0,
 		       libinput->timer.source);
