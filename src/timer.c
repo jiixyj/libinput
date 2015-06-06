@@ -51,7 +51,6 @@ libinput_timer_init(struct libinput_timer *timer, struct libinput *libinput,
 static void
 libinput_timer_arm_timer_fd(struct libinput *libinput)
 {
-	int r;
 	struct libinput_timer *timer;
 	uint64_t earliest_expire = UINT64_MAX;
 
@@ -61,6 +60,7 @@ libinput_timer_arm_timer_fd(struct libinput *libinput)
 	}
 
 #ifdef __linux__
+	int r;
 	struct itimerspec its = { { 0, 0 }, { 0, 0 } };
 	if (earliest_expire != UINT64_MAX) {
 		its.it_value.tv_sec = earliest_expire / 1000;
