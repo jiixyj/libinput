@@ -130,12 +130,14 @@ libinput_timer_handler(void *data)
 	uint64_t discard;
 	int r;
 
+#ifdef __linux__
 	r = read(libinput->timer.fd, &discard, sizeof(discard));
 	if (r == -1 && errno != EAGAIN)
 		log_bug_libinput(libinput,
 				 "Error %d reading from timerfd (%s)",
 				 errno,
 				 strerror(errno));
+#endif
 
 	fprintf(stderr, "handling timer\n");
 
