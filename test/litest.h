@@ -142,6 +142,8 @@ enum litest_device_type {
 	LITEST_NEXUS4_TOUCH_SCREEN = -28,
 	LITEST_MAGIC_TRACKPAD = -29,
 	LITEST_ELANTECH_TOUCHPAD = -30,
+	LITEST_MOUSE_GLADIUS = -31,
+	LITEST_MOUSE_WHEEL_CLICK_ANGLE = -32,
 };
 
 enum litest_device_feature {
@@ -402,6 +404,23 @@ struct libevdev_uinput * litest_create_uinput_abs_device(const char *name,
 							 struct input_id *id,
 							 const struct input_absinfo *abs,
 							 ...);
+#define litest_assert_double_eq(a_, b_)\
+	ck_assert_int_eq((int)(a_ * 256), (int)(b_ * 256))
+
+#define litest_assert_double_ne(a_, b_)\
+	ck_assert_int_ne((int)(a_ * 256), (int)(b_ * 256))
+
+#define litest_assert_double_lt(a_, b_)\
+	ck_assert_int_lt((int)(a_ * 256), (int)(b_ * 256))
+
+#define litest_assert_double_le(a_, b_)\
+	ck_assert_int_le((int)(a_ * 256), (int)(b_ * 256))
+
+#define litest_assert_double_gt(a_, b_)\
+	ck_assert_int_gt((int)(a_ * 256), (int)(b_ * 256))
+
+#define litest_assert_double_ge(a_, b_)\
+	ck_assert_int_ge((int)(a_ * 256), (int)(b_ * 256))
 
 void litest_timeout_tap(void);
 void litest_timeout_tapndrag(void);

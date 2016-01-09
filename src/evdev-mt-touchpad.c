@@ -832,7 +832,8 @@ tp_position_fake_touches(struct tp_dispatch *tp)
 	struct tp_touch *topmost = NULL;
 	unsigned int start, i;
 
-	if (tp_fake_finger_count(tp) <= tp->num_slots)
+	if (tp_fake_finger_count(tp) <= tp->num_slots ||
+	    tp->nfingers_down == 0)
 		return;
 
 	/* We have at least one fake touch down. Find the top-most real
@@ -1564,7 +1565,8 @@ tp_init_accel(struct tp_dispatch *tp, double diagonal)
 	tp->accel.x_scale_coeff = (DEFAULT_MOUSE_DPI/25.4) / res_x;
 	tp->accel.y_scale_coeff = (DEFAULT_MOUSE_DPI/25.4) / res_y;
 
-	if (tp->device->model_flags & EVDEV_MODEL_LENOVO_X230)
+	if (tp->device->model_flags & EVDEV_MODEL_LENOVO_X230 ||
+	    tp->device->model_flags & EVDEV_MODEL_LENOVO_X220_TOUCHPAD_FW81)
 		filter = create_pointer_accelerator_filter_lenovo_x230(tp->device->dpi);
 	else
 		filter = create_pointer_accelerator_filter_touchpad(tp->device->dpi);
