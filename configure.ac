@@ -51,6 +51,7 @@ AC_CHECK_DECL(CLOCK_MONOTONIC,[],
 	      [[#include <time.h>]])
 
 PKG_PROG_PKG_CONFIG()
+PKG_CHECK_MODULES(LIBUDEV, [libudev])
 PKG_CHECK_MODULES(LIBEVDEV, [libevdev >= 0.4])
 
 AC_ARG_WITH(libunwind,

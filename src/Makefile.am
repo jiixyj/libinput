@@ -25,8 +25,6 @@ libinput_la_SOURCES =			\
 	path.c				\
 	udev-seat.c			\
 	udev-seat.h			\
-	udev-stubs.c			\
-	udev-stubs.h			\
 	timer.c				\
 	timer.h				\
 	../include/linux/input.h
@@ -56,8 +54,8 @@ libfilter_la_SOURCES = \
 	filter.c \
 	filter.h \
 	filter-private.h
-libfilter_la_LIBADD =
-libfilter_la_CFLAGS =
+libfilter_la_LIBADD = $(LIBUDEV_LIBS)
+libfilter_la_CFLAGS = $(LIBUDEV_CFLAGS)
 
 libinput_la_LDFLAGS = -version-info $(LIBINPUT_LT_VERSION) -shared \
 		      -Wl,--version-script=$(srcdir)/libinput.sym

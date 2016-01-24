@@ -27,11 +27,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#ifdef __linux__
 #include <libudev.h>
-#else
-#include "udev-stubs.h"
-#endif
 
 #include <libinput.h>
 #include <libinput-util.h>

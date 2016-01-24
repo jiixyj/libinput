@@ -8,11 +8,9 @@ AM_CPPFLAGS = -I$(top_srcdir)/include \
 
 libshared_la_SOURCES = \
 		       shared.c \
-		       shared.h \
-		       ../src/udev-stubs.c
-
-libshared_la_CFLAGS = $(LIBEVDEV_CFLAGS)
-libshared_la_LIBADD = $(LIBEVDEV_LIBS)
+		       shared.h
+libshared_la_CFLAGS = $(LIBEVDEV_CFLAGS) $(LIBUDEV_CFLAGS)
+libshared_la_LIBADD = $(LIBEVDEV_LIBS) $(LIBUDEV_LIBS)
 
 event_debug_SOURCES = event-debug.c
 event_debug_LDADD = ../src/libinput.la libshared.la $(LIBUDEV_LIBS) $(LIBEVDEV_LIBS)
@@ -20,8 +18,9 @@ event_debug_LDFLAGS = -no-install
 event_debug_CFLAGS = $(LIBUDEV_CFLAGS) $(LIBEVDEV_CFLAGS)
 
 ptraccel_debug_SOURCES = ptraccel-debug.c
-ptraccel_debug_LDADD = ../src/libfilter.la
+ptraccel_debug_LDADD = ../src/libfilter.la $(LIBUDEV_LIBS)
 ptraccel_debug_LDFLAGS = -no-install
+ptraccel_debug_CFLAGS = $(LIBUDEV_CFLAGS)
 
 libinput_list_devices_SOURCES = libinput-list-devices.c
 libinput_list_devices_LDADD = ../src/libinput.la libshared.la $(LIBUDEV_LIBS)

@@ -33,10 +33,6 @@
 #include "evdev.h"
 #include "udev-seat.h"
 
-#ifndef __linux__
-#include "udev-stubs.h"
-#endif
-
 static const char default_seat[] = "seat0";
 static const char default_seat_name[] = "default";
 

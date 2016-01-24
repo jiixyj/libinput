@@ -30,11 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef __linux__
 #include <libudev.h>
-#else
-#include "udev-stubs.h"
-#endif
 
 #include <libevdev/libevdev.h>
 #include <libinput-util.h>
