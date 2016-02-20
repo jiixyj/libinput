@@ -320,7 +320,6 @@ struct tp_dispatch {
 	struct {
 		int32_t right_edge;		/* in device coordinates */
 		int32_t left_edge;		/* in device coordinates */
-		int32_t vert_center;		/* in device coordinates */
 
 		bool trackpoint_active;
 		struct libinput_event_listener trackpoint_listener;
@@ -342,6 +341,7 @@ struct tp_dispatch {
 		struct libinput_event_listener keyboard_listener;
 		struct libinput_timer keyboard_timer;
 		struct evdev_device *keyboard;
+		unsigned long key_mask[NLONGS(KEY_CNT)];
 
 		uint64_t keyboard_last_press_time;
 	} dwt;
