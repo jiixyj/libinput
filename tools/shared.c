@@ -71,10 +71,6 @@ log_handler(struct libinput *li,
 	vprintf(format, args);
 }
 
-#ifndef __linux__
-const char *program_invocation_short_name;
-#endif
-
 void
 tools_usage()
 {
@@ -109,7 +105,7 @@ tools_usage()
 	       "--grab .......... Exclusively grab all openend devices\n"
 	       "--verbose ....... Print debugging output.\n"
 	       "--help .......... Print this help.\n",
-		program_invocation_short_name);
+		getprogname());
 }
 
 void
@@ -172,10 +168,6 @@ tools_parse_args(int argc, char **argv, struct tools_context *context)
 		c = getopt_long(argc, argv, "h", opts, &option_index);
 		if (c == -1)
 			break;
-
-#ifndef __linux__
-		program_invocation_short_name = argv[0];
-#endif
 
 		switch(c) {
 		case 'h':

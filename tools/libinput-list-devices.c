@@ -286,7 +286,7 @@ print_device_notify(struct libinput_event *ev)
 }
 
 static inline void
-usage(const char *argv0)
+usage(void)
 {
 	printf("Usage: %s [--help|--version]\n"
 	       "\n"
@@ -299,7 +299,7 @@ usage(const char *argv0)
 	       "--version ... show version information\n"
 	       "\n"
 	       "This tool requires access to the /dev/input/eventX nodes.\n",
-	       argv0);
+	       getprogname());
 }
 
 int
@@ -311,13 +311,13 @@ main(int argc, char **argv)
 
 	if (argc > 1) {
 		if (streq(argv[1], "--help")) {
-			usage(argv[0]);
+			usage();
 			return 0;
 		} else if (streq(argv[1], "--version")) {
 			printf("%s\n", LIBINPUT_VERSION);
 			return 0;
 		} else {
-			usage(argv[0]);
+			usage();
 			return 1;
 		}
 	}

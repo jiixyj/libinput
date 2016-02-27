@@ -26,7 +26,6 @@
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
-#include <stdio.h>
 #include <string.h>
 #include <sys/timerfd.h>
 #include <unistd.h>
@@ -47,7 +46,9 @@ libinput_timer_init(struct libinput_timer *timer, struct libinput *libinput,
 static void
 libinput_timer_arm_timer_fd(struct libinput *libinput)
 {
+	int r;
 	struct libinput_timer *timer;
+	struct itimerspec its = { { 0, 0 }, { 0, 0 } };
 	uint64_t earliest_expire = UINT64_MAX;
 
 	list_for_each(timer, &libinput->timer.list, link) {
@@ -55,17 +56,14 @@ libinput_timer_arm_timer_fd(struct libinput *libinput)
 			earliest_expire = timer->expire;
 	}
 
-	int r;
-	struct itimerspec its = { { 0, 0 }, { 0, 0 } };
 	if (earliest_expire != UINT64_MAX) {
 		its.it_value.tv_sec = earliest_expire / ms2us(1000);
 		its.it_value.tv_nsec = (earliest_expire % ms2us(1000)) * 1000;
 	}
 
 	r = timerfd_settime(libinput->timer.fd, TFD_TIMER_ABSTIME, &its, NULL);
-	if (r) {
+	if (r)
 		log_error(libinput, "timerfd_settime error: %s\n", strerror(errno));
-	}
 }
 
 void
@@ -82,7 +80,6 @@ libinput_timer_set(struct libinput_timer *timer, uint64_t expire)
 				 PRIu64 " expire %" PRIu64 "\n",
 				 now, expire);
 #endif
-	fprintf(stderr, "setting timer at %llu\n", (long long unsigned) expire);
 
 	assert(expire);
 

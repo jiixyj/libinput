@@ -890,8 +890,8 @@ libinput_add_fd(struct libinput *libinput,
 		libinput_source_dispatch_t dispatch,
 		void *user_data)
 {
-	struct epoll_event ep;
 	struct libinput_source *source;
+	struct epoll_event ep;
 
 	source = zalloc(sizeof *source);
 	if (!source)
@@ -940,7 +940,7 @@ libinput_init(struct libinput *libinput,
 	}
 
 	libinput->log_handler = libinput_default_log_func;
-	libinput->log_priority = LIBINPUT_LOG_PRIORITY_DEBUG;
+	libinput->log_priority = LIBINPUT_LOG_PRIORITY_ERROR;
 	libinput->interface = interface;
 	libinput->interface_backend = interface_backend;
 	libinput->user_data = user_data;
@@ -1188,9 +1188,9 @@ LIBINPUT_EXPORT int
 libinput_dispatch(struct libinput *libinput)
 {
 	struct libinput_source *source;
+	struct epoll_event ep[32];
 	int i, count;
 
-	struct epoll_event ep[32];
 	count = epoll_wait(libinput->epoll_fd, ep, ARRAY_LENGTH(ep), 0);
 	if (count < 0)
 		return -errno;

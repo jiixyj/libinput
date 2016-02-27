@@ -1,4 +1,4 @@
-SUBDIRS = src doc tools
+SUBDIRS = src doc tools udev
 
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
