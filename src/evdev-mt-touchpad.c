@@ -140,6 +140,14 @@ tp_get_touch(struct tp_dispatch *tp, unsigned int slot)
 static inline unsigned int
 tp_fake_finger_count(struct tp_dispatch *tp)
 {
+	/* Only one of BTN_TOOL_DOUBLETAP/TRIPLETAP/... may be set at any
+	 * time */
+	if (__builtin_popcount(
+		       tp->fake_touches & ~(FAKE_FINGER_OVERFLOW|0x1)) > 1)
+	    log_bug_kernel(tp->device->base.seat->libinput,
+			   "Invalid fake finger state %#x\n",
+			   tp->fake_touches);
+
 	if (tp->fake_touches & FAKE_FINGER_OVERFLOW)
 		return FAKE_FINGER_OVERFLOW;
 	else /* don't count BTN_TOUCH */
@@ -510,7 +518,7 @@ tp_pin_fingers(struct tp_dispatch *tp)
 }
 
 int
-tp_touch_active(struct tp_dispatch *tp, struct tp_touch *t)
+tp_touch_active(const struct tp_dispatch *tp, const struct tp_touch *t)
 {
 	return (t->state == TOUCH_BEGIN || t->state == TOUCH_UPDATE) &&
 		t->palm.state == PALM_NONE &&
@@ -521,7 +529,7 @@ tp_touch_active(struct tp_dispatch *tp, struct tp_touch *t)
 }
 
 bool
-tp_palm_tap_is_palm(struct tp_dispatch *tp, struct tp_touch *t)
+tp_palm_tap_is_palm(const struct tp_dispatch *tp, const struct tp_touch *t)
 {
 	if (t->state != TOUCH_BEGIN)
 		return false;
@@ -742,6 +750,9 @@ tp_unhover_abs_distance(struct tp_dispatch *tp, uint64_t time)
 
 	for (i = 0; i < tp->ntouches; i++) {
 		t = tp_get_touch(tp, i);
+
+		if (!t->dirty)
+			continue;
 
 		if (t->state == TOUCH_HOVERING) {
 			if (t->distance == 0) {
@@ -1460,6 +1471,7 @@ static struct evdev_dispatch_interface tp_interface = {
 	tp_interface_device_removed,
 	tp_interface_device_removed, /* device_suspended, treat as remove */
 	tp_interface_device_added,   /* device_resumed, treat as add */
+	NULL,                        /* post_added */
 };
 
 static void
@@ -1819,8 +1831,7 @@ tp_init_palmdetect(struct tp_dispatch *tp,
 
 	width = device->abs.dimensions.x;
 
-	/* Wacom doesn't have internal touchpads,
-	 * Apple touchpads are always big enough to warrant palm detection */
+	/* Wacom doesn't have internal touchpads */
 	if (device->model_flags & EVDEV_MODEL_WACOM_TOUCHPAD)
 		return 0;
 
@@ -2157,40 +2168,6 @@ tp_change_to_left_handed(struct evdev_device *device)
 	device->left_handed.enabled = device->left_handed.want_enabled;
 }
 
-struct model_lookup_t {
-	uint16_t vendor;
-	uint16_t product_start;
-	uint16_t product_end;
-	enum touchpad_model model;
-};
-
-static struct model_lookup_t model_lookup_table[] = {
-	{ 0x0002, 0x0007, 0x0007, MODEL_SYNAPTICS },
-	{ 0x0002, 0x0008, 0x0008, MODEL_ALPS },
-	{ 0x0002, 0x000e, 0x000e, MODEL_ELANTECH },
-	{ 0x05ac,      0, 0x0222, MODEL_APPLETOUCH },
-	{ 0x05ac, 0x0223, 0x0228, MODEL_UNIBODY_MACBOOK },
-	{ 0x05ac, 0x0229, 0x022b, MODEL_APPLETOUCH },
-	{ 0x05ac, 0x022c, 0xffff, MODEL_UNIBODY_MACBOOK },
-	{ 0, 0, 0, 0 }
-};
-
-static enum touchpad_model
-tp_get_model(struct evdev_device *device)
-{
-	struct model_lookup_t *lookup;
-	uint16_t vendor  = libevdev_get_id_vendor(device->evdev);
-	uint16_t product = libevdev_get_id_product(device->evdev);
-
-	for (lookup = model_lookup_table; lookup->vendor; lookup++) {
-		if (lookup->vendor == vendor &&
-		    lookup->product_start <= product &&
-		    product <= lookup->product_end)
-			return lookup->model;
-	}
-	return MODEL_UNKNOWN;
-}
-
 struct evdev_dispatch *
 evdev_mt_touchpad_create(struct evdev_device *device)
 {
@@ -2199,8 +2176,6 @@ evdev_mt_touchpad_create(struct evdev_device *device)
 	tp = zalloc(sizeof *tp);
 	if (!tp)
 		return NULL;
-
-	tp->model = tp_get_model(device);
 
 	if (tp_init(tp, device) != 0) {
 		tp_interface_destroy(&tp->base);

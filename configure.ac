@@ -1,8 +1,8 @@
 AC_PREREQ([2.64])
 
 m4_define([libinput_major_version], [1])
-m4_define([libinput_minor_version], [1])
-m4_define([libinput_micro_version], [8])
+m4_define([libinput_minor_version], [2])
+m4_define([libinput_micro_version], [0])
 m4_define([libinput_version],
           [libinput_major_version.libinput_minor_version.libinput_micro_version])
 
@@ -31,7 +31,7 @@ AM_INIT_AUTOMAKE([1.11 foreign no-dist-gzip dist-xz])
 # b) If interfaces have been changed or added, but binary compatibility has
 #    been preserved, change to C+1:0:A+1
 # c) If the interface is the same as the previous version, change to C:R+1:A
-LIBINPUT_LT_VERSION=16:8:6
+LIBINPUT_LT_VERSION=17:2:7
 AC_SUBST(LIBINPUT_LT_VERSION)
 
 AM_SILENT_RULES([yes])
@@ -189,6 +189,16 @@ if test "x$build_tests" = "xyes"; then
 	AC_PATH_PROG(VALGRIND, [valgrind])
 fi
 
+AC_ARG_ENABLE(libwacom,
+	      AS_HELP_STRING([--enable-libwacom],
+			     [Use libwacom for tablet identification (default=enabled)]),
+	      [use_libwacom="$enableval"],
+	      [use_libwacom="yes"])
+if test "x$use_libwacom" = "xyes"; then
+	PKG_CHECK_MODULES(LIBWACOM, [libwacom >= 0.12], [HAVE_LIBWACOM="yes"])
+	AC_DEFINE(HAVE_LIBWACOM, 1, [Build with libwacom])
+fi
+
 AM_CONDITIONAL(HAVE_VALGRIND, [test "x$VALGRIND" != "x"])
 AM_CONDITIONAL(BUILD_TESTS, [test "x$build_tests" = "xyes"])
 AM_CONDITIONAL(BUILD_DOCS, [test "x$build_documentation" = "xyes"])
@@ -218,6 +228,7 @@ AC_MSG_RESULT([
 	Prefix			${prefix}
 	udev base dir		${UDEV_DIR}
 
+	libwacom enabled	${use_libwacom}
 	Build documentation	${build_documentation}
 	Build tests		${build_tests}
 	Tests use valgrind	${VALGRIND}

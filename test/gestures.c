@@ -82,13 +82,13 @@ START_TEST(gestures_swipe_3fg)
 	litest_drain_events(li);
 
 	litest_touch_down(dev, 0, 40, 40);
-	litest_touch_down(dev, 1, 40, 50);
-	litest_touch_down(dev, 2, 40, 60);
+	litest_touch_down(dev, 1, 50, 40);
+	litest_touch_down(dev, 2, 60, 40);
 	libinput_dispatch(li);
 	litest_touch_move_three_touches(dev,
 					40, 40,
-					40, 50,
-					40, 60,
+					50, 40,
+					60, 40,
 					dir_x, dir_y,
 					10, 2);
 	libinput_dispatch(li);
@@ -110,7 +110,6 @@ START_TEST(gestures_swipe_3fg)
 
 		dx = libinput_event_gesture_get_dx(gevent);
 		dy = libinput_event_gesture_get_dy(gevent);
-		debug_trace("delta: %.2f/%.2f\n", dx, dy);
 		if (dir_x == 0.0)
 			ck_assert(dx == 0.0);
 		else if (dir_x < 0.0)
@@ -152,6 +151,346 @@ START_TEST(gestures_swipe_3fg)
 	gevent = litest_is_gesture_event(event,
 					 LIBINPUT_EVENT_GESTURE_SWIPE_END,
 					 3);
+	ck_assert(!libinput_event_gesture_get_cancelled(gevent));
+	libinput_event_destroy(event);
+}
+END_TEST
+
+START_TEST(gestures_swipe_3fg_btntool)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+	struct libinput_event *event;
+	struct libinput_event_gesture *gevent;
+	double dx, dy;
+	int cardinal = _i; /* ranged test */
+	double dir_x, dir_y;
+	int cardinals[8][2] = {
+		{ 0, 30 },
+		{ 30, 30 },
+		{ 30, 0 },
+		{ 30, -30 },
+		{ 0, -30 },
+		{ -30, -30 },
+		{ -30, 0 },
+		{ -30, 30 },
+	};
+
+	if (libevdev_get_num_slots(dev->evdev) > 2 ||
+	    !libinput_device_has_capability(dev->libinput_device,
+					    LIBINPUT_DEVICE_CAP_GESTURE))
+		return;
+
+	dir_x = cardinals[cardinal][0];
+	dir_y = cardinals[cardinal][1];
+
+	litest_drain_events(li);
+
+	litest_touch_down(dev, 0, 40, 40);
+	litest_touch_down(dev, 1, 50, 40);
+	litest_event(dev, EV_KEY, BTN_TOOL_DOUBLETAP, 0);
+	litest_event(dev, EV_KEY, BTN_TOOL_TRIPLETAP, 1);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+
+	libinput_dispatch(li);
+	litest_touch_move_two_touches(dev,
+				      40, 40,
+				      50, 40,
+				      dir_x, dir_y,
+				      10, 2);
+	libinput_dispatch(li);
+
+	event = libinput_get_event(li);
+	gevent = litest_is_gesture_event(event,
+					 LIBINPUT_EVENT_GESTURE_SWIPE_BEGIN,
+					 3);
+	dx = libinput_event_gesture_get_dx(gevent);
+	dy = libinput_event_gesture_get_dy(gevent);
+	ck_assert(dx == 0.0);
+	ck_assert(dy == 0.0);
+	libinput_event_destroy(event);
+
+	while ((event = libinput_get_event(li)) != NULL) {
+		gevent = litest_is_gesture_event(event,
+						 LIBINPUT_EVENT_GESTURE_SWIPE_UPDATE,
+						 3);
+
+		dx = libinput_event_gesture_get_dx(gevent);
+		dy = libinput_event_gesture_get_dy(gevent);
+		if (dir_x == 0.0)
+			ck_assert(dx == 0.0);
+		else if (dir_x < 0.0)
+			ck_assert(dx < 0.0);
+		else if (dir_x > 0.0)
+			ck_assert(dx > 0.0);
+
+		if (dir_y == 0.0)
+			ck_assert(dy == 0.0);
+		else if (dir_y < 0.0)
+			ck_assert(dy < 0.0);
+		else if (dir_y > 0.0)
+			ck_assert(dy > 0.0);
+
+		dx = libinput_event_gesture_get_dx_unaccelerated(gevent);
+		dy = libinput_event_gesture_get_dy_unaccelerated(gevent);
+		if (dir_x == 0.0)
+			ck_assert(dx == 0.0);
+		else if (dir_x < 0.0)
+			ck_assert(dx < 0.0);
+		else if (dir_x > 0.0)
+			ck_assert(dx > 0.0);
+
+		if (dir_y == 0.0)
+			ck_assert(dy == 0.0);
+		else if (dir_y < 0.0)
+			ck_assert(dy < 0.0);
+		else if (dir_y > 0.0)
+			ck_assert(dy > 0.0);
+
+		libinput_event_destroy(event);
+	}
+
+	litest_touch_up(dev, 0);
+	litest_touch_up(dev, 1);
+	libinput_dispatch(li);
+	event = libinput_get_event(li);
+	gevent = litest_is_gesture_event(event,
+					 LIBINPUT_EVENT_GESTURE_SWIPE_END,
+					 3);
+	ck_assert(!libinput_event_gesture_get_cancelled(gevent));
+	libinput_event_destroy(event);
+}
+END_TEST
+
+START_TEST(gestures_swipe_4fg)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+	struct libinput_event *event;
+	struct libinput_event_gesture *gevent;
+	double dx, dy;
+	int cardinal = _i; /* ranged test */
+	double dir_x, dir_y;
+	int cardinals[8][2] = {
+		{ 0, 3 },
+		{ 3, 3 },
+		{ 3, 0 },
+		{ 3, -3 },
+		{ 0, -3 },
+		{ -3, -3 },
+		{ -3, 0 },
+		{ -3, 3 },
+	};
+	int i;
+
+	if (libevdev_get_num_slots(dev->evdev) < 4)
+		return;
+
+	dir_x = cardinals[cardinal][0];
+	dir_y = cardinals[cardinal][1];
+
+	litest_drain_events(li);
+
+	litest_touch_down(dev, 0, 40, 40);
+	litest_touch_down(dev, 1, 50, 40);
+	litest_touch_down(dev, 2, 60, 40);
+	litest_touch_down(dev, 3, 70, 40);
+	libinput_dispatch(li);
+
+	for (i = 0; i < 8; i++) {
+		litest_push_event_frame(dev);
+
+		dir_x += cardinals[cardinal][0];
+		dir_y += cardinals[cardinal][1];
+
+		litest_touch_move(dev,
+				  0,
+				  40 + dir_x,
+				  40 + dir_y);
+		litest_touch_move(dev,
+				  1,
+				  50 + dir_x,
+				  40 + dir_y);
+		litest_touch_move(dev,
+				  2,
+				  60 + dir_x,
+				  40 + dir_y);
+		litest_touch_move(dev,
+				  3,
+				  70 + dir_x,
+				  40 + dir_y);
+		litest_pop_event_frame(dev);
+		libinput_dispatch(li);
+	}
+
+	libinput_dispatch(li);
+
+	event = libinput_get_event(li);
+	gevent = litest_is_gesture_event(event,
+					 LIBINPUT_EVENT_GESTURE_SWIPE_BEGIN,
+					 4);
+	dx = libinput_event_gesture_get_dx(gevent);
+	dy = libinput_event_gesture_get_dy(gevent);
+	ck_assert(dx == 0.0);
+	ck_assert(dy == 0.0);
+	libinput_event_destroy(event);
+
+	while ((event = libinput_get_event(li)) != NULL) {
+		gevent = litest_is_gesture_event(event,
+						 LIBINPUT_EVENT_GESTURE_SWIPE_UPDATE,
+						 4);
+
+		dx = libinput_event_gesture_get_dx(gevent);
+		dy = libinput_event_gesture_get_dy(gevent);
+		if (dir_x == 0.0)
+			ck_assert(dx == 0.0);
+		else if (dir_x < 0.0)
+			ck_assert(dx < 0.0);
+		else if (dir_x > 0.0)
+			ck_assert(dx > 0.0);
+
+		if (dir_y == 0.0)
+			ck_assert(dy == 0.0);
+		else if (dir_y < 0.0)
+			ck_assert(dy < 0.0);
+		else if (dir_y > 0.0)
+			ck_assert(dy > 0.0);
+
+		dx = libinput_event_gesture_get_dx_unaccelerated(gevent);
+		dy = libinput_event_gesture_get_dy_unaccelerated(gevent);
+		if (dir_x == 0.0)
+			ck_assert(dx == 0.0);
+		else if (dir_x < 0.0)
+			ck_assert(dx < 0.0);
+		else if (dir_x > 0.0)
+			ck_assert(dx > 0.0);
+
+		if (dir_y == 0.0)
+			ck_assert(dy == 0.0);
+		else if (dir_y < 0.0)
+			ck_assert(dy < 0.0);
+		else if (dir_y > 0.0)
+			ck_assert(dy > 0.0);
+
+		libinput_event_destroy(event);
+	}
+
+	litest_touch_up(dev, 0);
+	litest_touch_up(dev, 1);
+	litest_touch_up(dev, 2);
+	litest_touch_up(dev, 3);
+	libinput_dispatch(li);
+	event = libinput_get_event(li);
+	gevent = litest_is_gesture_event(event,
+					 LIBINPUT_EVENT_GESTURE_SWIPE_END,
+					 4);
+	ck_assert(!libinput_event_gesture_get_cancelled(gevent));
+	libinput_event_destroy(event);
+}
+END_TEST
+
+START_TEST(gestures_swipe_4fg_btntool)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+	struct libinput_event *event;
+	struct libinput_event_gesture *gevent;
+	double dx, dy;
+	int cardinal = _i; /* ranged test */
+	double dir_x, dir_y;
+	int cardinals[8][2] = {
+		{ 0, 30 },
+		{ 30, 30 },
+		{ 30, 0 },
+		{ 30, -30 },
+		{ 0, -30 },
+		{ -30, -30 },
+		{ -30, 0 },
+		{ -30, 30 },
+	};
+
+	if (libevdev_get_num_slots(dev->evdev) > 2 ||
+	    !libevdev_has_event_code(dev->evdev, EV_KEY, BTN_TOOL_QUADTAP) ||
+	    !libinput_device_has_capability(dev->libinput_device,
+					    LIBINPUT_DEVICE_CAP_GESTURE))
+		return;
+
+	dir_x = cardinals[cardinal][0];
+	dir_y = cardinals[cardinal][1];
+
+	litest_drain_events(li);
+
+	litest_touch_down(dev, 0, 40, 40);
+	litest_touch_down(dev, 1, 50, 40);
+	litest_event(dev, EV_KEY, BTN_TOOL_DOUBLETAP, 0);
+	litest_event(dev, EV_KEY, BTN_TOOL_QUADTAP, 1);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+
+	libinput_dispatch(li);
+	litest_touch_move_two_touches(dev,
+				      40, 40,
+				      50, 40,
+				      dir_x, dir_y,
+				      10, 2);
+	libinput_dispatch(li);
+
+	event = libinput_get_event(li);
+	gevent = litest_is_gesture_event(event,
+					 LIBINPUT_EVENT_GESTURE_SWIPE_BEGIN,
+					 4);
+	dx = libinput_event_gesture_get_dx(gevent);
+	dy = libinput_event_gesture_get_dy(gevent);
+	ck_assert(dx == 0.0);
+	ck_assert(dy == 0.0);
+	libinput_event_destroy(event);
+
+	while ((event = libinput_get_event(li)) != NULL) {
+		gevent = litest_is_gesture_event(event,
+						 LIBINPUT_EVENT_GESTURE_SWIPE_UPDATE,
+						 4);
+
+		dx = libinput_event_gesture_get_dx(gevent);
+		dy = libinput_event_gesture_get_dy(gevent);
+		if (dir_x == 0.0)
+			ck_assert(dx == 0.0);
+		else if (dir_x < 0.0)
+			ck_assert(dx < 0.0);
+		else if (dir_x > 0.0)
+			ck_assert(dx > 0.0);
+
+		if (dir_y == 0.0)
+			ck_assert(dy == 0.0);
+		else if (dir_y < 0.0)
+			ck_assert(dy < 0.0);
+		else if (dir_y > 0.0)
+			ck_assert(dy > 0.0);
+
+		dx = libinput_event_gesture_get_dx_unaccelerated(gevent);
+		dy = libinput_event_gesture_get_dy_unaccelerated(gevent);
+		if (dir_x == 0.0)
+			ck_assert(dx == 0.0);
+		else if (dir_x < 0.0)
+			ck_assert(dx < 0.0);
+		else if (dir_x > 0.0)
+			ck_assert(dx > 0.0);
+
+		if (dir_y == 0.0)
+			ck_assert(dy == 0.0);
+		else if (dir_y < 0.0)
+			ck_assert(dy < 0.0);
+		else if (dir_y > 0.0)
+			ck_assert(dy > 0.0);
+
+		libinput_event_destroy(event);
+	}
+
+	litest_touch_up(dev, 0);
+	litest_touch_up(dev, 1);
+	libinput_dispatch(li);
+	event = libinput_get_event(li);
+	gevent = litest_is_gesture_event(event,
+					 LIBINPUT_EVENT_GESTURE_SWIPE_END,
+					 4);
 	ck_assert(!libinput_event_gesture_get_cancelled(gevent));
 	libinput_event_destroy(event);
 }
@@ -253,6 +592,431 @@ START_TEST(gestures_pinch)
 	gevent = litest_is_gesture_event(event,
 					 LIBINPUT_EVENT_GESTURE_PINCH_END,
 					 2);
+	ck_assert(!libinput_event_gesture_get_cancelled(gevent));
+	libinput_event_destroy(event);
+}
+END_TEST
+
+START_TEST(gestures_pinch_3fg)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+	struct libinput_event *event;
+	struct libinput_event_gesture *gevent;
+	double dx, dy;
+	int cardinal = _i; /* ranged test */
+	double dir_x, dir_y;
+	int i;
+	double scale, oldscale;
+	double angle;
+	int cardinals[8][2] = {
+		{ 0, 30 },
+		{ 30, 30 },
+		{ 30, 0 },
+		{ 30, -30 },
+		{ 0, -30 },
+		{ -30, -30 },
+		{ -30, 0 },
+		{ -30, 30 },
+	};
+
+	if (libevdev_get_num_slots(dev->evdev) < 3)
+		return;
+
+	dir_x = cardinals[cardinal][0];
+	dir_y = cardinals[cardinal][1];
+
+	litest_drain_events(li);
+
+	litest_touch_down(dev, 0, 50 + dir_x, 50 + dir_y);
+	litest_touch_down(dev, 1, 50 - dir_x, 50 - dir_y);
+	litest_touch_down(dev, 2, 51 - dir_x, 51 - dir_y);
+	libinput_dispatch(li);
+
+	for (i = 0; i < 8; i++) {
+		litest_push_event_frame(dev);
+		if (dir_x > 0.0)
+			dir_x -= 2;
+		else if (dir_x < 0.0)
+			dir_x += 2;
+		if (dir_y > 0.0)
+			dir_y -= 2;
+		else if (dir_y < 0.0)
+			dir_y += 2;
+		litest_touch_move(dev,
+				  0,
+				  50 + dir_x,
+				  50 + dir_y);
+		litest_touch_move(dev,
+				  1,
+				  50 - dir_x,
+				  50 - dir_y);
+		litest_touch_move(dev,
+				  2,
+				  51 - dir_x,
+				  51 - dir_y);
+		litest_pop_event_frame(dev);
+		libinput_dispatch(li);
+	}
+
+	event = libinput_get_event(li);
+	gevent = litest_is_gesture_event(event,
+					 LIBINPUT_EVENT_GESTURE_PINCH_BEGIN,
+					 3);
+	dx = libinput_event_gesture_get_dx(gevent);
+	dy = libinput_event_gesture_get_dy(gevent);
+	scale = libinput_event_gesture_get_scale(gevent);
+	ck_assert(dx == 0.0);
+	ck_assert(dy == 0.0);
+	ck_assert(scale == 1.0);
+
+	libinput_event_destroy(event);
+
+	while ((event = libinput_get_event(li)) != NULL) {
+		gevent = litest_is_gesture_event(event,
+						 LIBINPUT_EVENT_GESTURE_PINCH_UPDATE,
+						 3);
+
+		oldscale = scale;
+		scale = libinput_event_gesture_get_scale(gevent);
+
+		ck_assert(scale < oldscale);
+
+		angle = libinput_event_gesture_get_angle_delta(gevent);
+		ck_assert_double_le(fabs(angle), 1.0);
+
+		libinput_event_destroy(event);
+		libinput_dispatch(li);
+	}
+
+	litest_touch_up(dev, 0);
+	litest_touch_up(dev, 1);
+	litest_touch_up(dev, 2);
+	libinput_dispatch(li);
+	event = libinput_get_event(li);
+	gevent = litest_is_gesture_event(event,
+					 LIBINPUT_EVENT_GESTURE_PINCH_END,
+					 3);
+	ck_assert(!libinput_event_gesture_get_cancelled(gevent));
+	libinput_event_destroy(event);
+}
+END_TEST
+
+START_TEST(gestures_pinch_3fg_btntool)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+	struct libinput_event *event;
+	struct libinput_event_gesture *gevent;
+	double dx, dy;
+	int cardinal = _i; /* ranged test */
+	double dir_x, dir_y;
+	int i;
+	double scale, oldscale;
+	double angle;
+	int cardinals[8][2] = {
+		{ 0, 30 },
+		{ 30, 30 },
+		{ 30, 0 },
+		{ 30, -30 },
+		{ 0, -30 },
+		{ -30, -30 },
+		{ -30, 0 },
+		{ -30, 30 },
+	};
+
+	if (libevdev_get_num_slots(dev->evdev) > 2 ||
+	    !libinput_device_has_capability(dev->libinput_device,
+					    LIBINPUT_DEVICE_CAP_GESTURE))
+		return;
+
+	dir_x = cardinals[cardinal][0];
+	dir_y = cardinals[cardinal][1];
+
+	litest_drain_events(li);
+
+	litest_touch_down(dev, 0, 50 + dir_x, 50 + dir_y);
+	litest_touch_down(dev, 1, 50 - dir_x, 50 - dir_y);
+	litest_event(dev, EV_KEY, BTN_TOOL_DOUBLETAP, 0);
+	litest_event(dev, EV_KEY, BTN_TOOL_TRIPLETAP, 1);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+	libinput_dispatch(li);
+
+	for (i = 0; i < 8; i++) {
+		litest_push_event_frame(dev);
+		if (dir_x > 0.0)
+			dir_x -= 2;
+		else if (dir_x < 0.0)
+			dir_x += 2;
+		if (dir_y > 0.0)
+			dir_y -= 2;
+		else if (dir_y < 0.0)
+			dir_y += 2;
+		litest_touch_move(dev,
+				  0,
+				  50 + dir_x,
+				  50 + dir_y);
+		litest_touch_move(dev,
+				  1,
+				  50 - dir_x,
+				  50 - dir_y);
+		litest_pop_event_frame(dev);
+		libinput_dispatch(li);
+	}
+
+	event = libinput_get_event(li);
+	gevent = litest_is_gesture_event(event,
+					 LIBINPUT_EVENT_GESTURE_PINCH_BEGIN,
+					 3);
+	dx = libinput_event_gesture_get_dx(gevent);
+	dy = libinput_event_gesture_get_dy(gevent);
+	scale = libinput_event_gesture_get_scale(gevent);
+	ck_assert(dx == 0.0);
+	ck_assert(dy == 0.0);
+	ck_assert(scale == 1.0);
+
+	libinput_event_destroy(event);
+
+	while ((event = libinput_get_event(li)) != NULL) {
+		gevent = litest_is_gesture_event(event,
+						 LIBINPUT_EVENT_GESTURE_PINCH_UPDATE,
+						 3);
+
+		oldscale = scale;
+		scale = libinput_event_gesture_get_scale(gevent);
+
+		ck_assert(scale < oldscale);
+
+		angle = libinput_event_gesture_get_angle_delta(gevent);
+		ck_assert_double_le(fabs(angle), 1.0);
+
+		libinput_event_destroy(event);
+		libinput_dispatch(li);
+	}
+
+	litest_touch_up(dev, 0);
+	litest_touch_up(dev, 1);
+	libinput_dispatch(li);
+	event = libinput_get_event(li);
+	gevent = litest_is_gesture_event(event,
+					 LIBINPUT_EVENT_GESTURE_PINCH_END,
+					 3);
+	ck_assert(!libinput_event_gesture_get_cancelled(gevent));
+	libinput_event_destroy(event);
+}
+END_TEST
+
+START_TEST(gestures_pinch_4fg)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+	struct libinput_event *event;
+	struct libinput_event_gesture *gevent;
+	double dx, dy;
+	int cardinal = _i; /* ranged test */
+	double dir_x, dir_y;
+	int i;
+	double scale, oldscale;
+	double angle;
+	int cardinals[8][2] = {
+		{ 0, 30 },
+		{ 30, 30 },
+		{ 30, 0 },
+		{ 30, -30 },
+		{ 0, -30 },
+		{ -30, -30 },
+		{ -30, 0 },
+		{ -30, 30 },
+	};
+
+	if (libevdev_get_num_slots(dev->evdev) < 4)
+		return;
+
+	dir_x = cardinals[cardinal][0];
+	dir_y = cardinals[cardinal][1];
+
+	litest_drain_events(li);
+
+	litest_touch_down(dev, 0, 50 + dir_x, 50 + dir_y);
+	litest_touch_down(dev, 1, 50 - dir_x, 50 - dir_y);
+	litest_touch_down(dev, 2, 51 - dir_x, 51 - dir_y);
+	litest_touch_down(dev, 3, 52 - dir_x, 52 - dir_y);
+	libinput_dispatch(li);
+
+	for (i = 0; i < 8; i++) {
+		litest_push_event_frame(dev);
+		if (dir_x > 0.0)
+			dir_x -= 2;
+		else if (dir_x < 0.0)
+			dir_x += 2;
+		if (dir_y > 0.0)
+			dir_y -= 2;
+		else if (dir_y < 0.0)
+			dir_y += 2;
+		litest_touch_move(dev,
+				  0,
+				  50 + dir_x,
+				  50 + dir_y);
+		litest_touch_move(dev,
+				  1,
+				  50 - dir_x,
+				  50 - dir_y);
+		litest_touch_move(dev,
+				  2,
+				  51 - dir_x,
+				  51 - dir_y);
+		litest_touch_move(dev,
+				  3,
+				  52 - dir_x,
+				  52 - dir_y);
+		litest_pop_event_frame(dev);
+		libinput_dispatch(li);
+	}
+
+	event = libinput_get_event(li);
+	gevent = litest_is_gesture_event(event,
+					 LIBINPUT_EVENT_GESTURE_PINCH_BEGIN,
+					 4);
+	dx = libinput_event_gesture_get_dx(gevent);
+	dy = libinput_event_gesture_get_dy(gevent);
+	scale = libinput_event_gesture_get_scale(gevent);
+	ck_assert(dx == 0.0);
+	ck_assert(dy == 0.0);
+	ck_assert(scale == 1.0);
+
+	libinput_event_destroy(event);
+
+	while ((event = libinput_get_event(li)) != NULL) {
+		gevent = litest_is_gesture_event(event,
+						 LIBINPUT_EVENT_GESTURE_PINCH_UPDATE,
+						 4);
+
+		oldscale = scale;
+		scale = libinput_event_gesture_get_scale(gevent);
+
+		ck_assert(scale < oldscale);
+
+		angle = libinput_event_gesture_get_angle_delta(gevent);
+		ck_assert_double_le(fabs(angle), 1.0);
+
+		libinput_event_destroy(event);
+		libinput_dispatch(li);
+	}
+
+	litest_touch_up(dev, 0);
+	litest_touch_up(dev, 1);
+	litest_touch_up(dev, 2);
+	litest_touch_up(dev, 3);
+	libinput_dispatch(li);
+	event = libinput_get_event(li);
+	gevent = litest_is_gesture_event(event,
+					 LIBINPUT_EVENT_GESTURE_PINCH_END,
+					 4);
+	ck_assert(!libinput_event_gesture_get_cancelled(gevent));
+	libinput_event_destroy(event);
+}
+END_TEST
+
+START_TEST(gestures_pinch_4fg_btntool)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+	struct libinput_event *event;
+	struct libinput_event_gesture *gevent;
+	double dx, dy;
+	int cardinal = _i; /* ranged test */
+	double dir_x, dir_y;
+	int i;
+	double scale, oldscale;
+	double angle;
+	int cardinals[8][2] = {
+		{ 0, 30 },
+		{ 30, 30 },
+		{ 30, 0 },
+		{ 30, -30 },
+		{ 0, -30 },
+		{ -30, -30 },
+		{ -30, 0 },
+		{ -30, 30 },
+	};
+
+	if (libevdev_get_num_slots(dev->evdev) > 2 ||
+	    !libevdev_has_event_code(dev->evdev, EV_KEY, BTN_TOOL_QUADTAP) ||
+	    !libinput_device_has_capability(dev->libinput_device,
+					    LIBINPUT_DEVICE_CAP_GESTURE))
+		return;
+
+	dir_x = cardinals[cardinal][0];
+	dir_y = cardinals[cardinal][1];
+
+	litest_drain_events(li);
+
+	litest_touch_down(dev, 0, 50 + dir_x, 50 + dir_y);
+	litest_touch_down(dev, 1, 50 - dir_x, 50 - dir_y);
+	litest_event(dev, EV_KEY, BTN_TOOL_DOUBLETAP, 0);
+	litest_event(dev, EV_KEY, BTN_TOOL_QUADTAP, 1);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+	libinput_dispatch(li);
+
+	for (i = 0; i < 8; i++) {
+		litest_push_event_frame(dev);
+		if (dir_x > 0.0)
+			dir_x -= 2;
+		else if (dir_x < 0.0)
+			dir_x += 2;
+		if (dir_y > 0.0)
+			dir_y -= 2;
+		else if (dir_y < 0.0)
+			dir_y += 2;
+		litest_touch_move(dev,
+				  0,
+				  50 + dir_x,
+				  50 + dir_y);
+		litest_touch_move(dev,
+				  1,
+				  50 - dir_x,
+				  50 - dir_y);
+		litest_pop_event_frame(dev);
+		libinput_dispatch(li);
+	}
+
+	event = libinput_get_event(li);
+	gevent = litest_is_gesture_event(event,
+					 LIBINPUT_EVENT_GESTURE_PINCH_BEGIN,
+					 4);
+	dx = libinput_event_gesture_get_dx(gevent);
+	dy = libinput_event_gesture_get_dy(gevent);
+	scale = libinput_event_gesture_get_scale(gevent);
+	ck_assert(dx == 0.0);
+	ck_assert(dy == 0.0);
+	ck_assert(scale == 1.0);
+
+	libinput_event_destroy(event);
+
+	while ((event = libinput_get_event(li)) != NULL) {
+		gevent = litest_is_gesture_event(event,
+						 LIBINPUT_EVENT_GESTURE_PINCH_UPDATE,
+						 4);
+
+		oldscale = scale;
+		scale = libinput_event_gesture_get_scale(gevent);
+
+		ck_assert(scale < oldscale);
+
+		angle = libinput_event_gesture_get_angle_delta(gevent);
+		ck_assert_double_le(fabs(angle), 1.0);
+
+		libinput_event_destroy(event);
+		libinput_dispatch(li);
+	}
+
+	litest_touch_up(dev, 0);
+	litest_touch_up(dev, 1);
+	libinput_dispatch(li);
+	event = libinput_get_event(li);
+	gevent = litest_is_gesture_event(event,
+					 LIBINPUT_EVENT_GESTURE_PINCH_END,
+					 4);
 	ck_assert(!libinput_event_gesture_get_cancelled(gevent));
 	libinput_event_destroy(event);
 }
@@ -370,18 +1134,17 @@ START_TEST(gestures_time_usec)
 	litest_drain_events(li);
 
 	litest_touch_down(dev, 0, 40, 40);
-	litest_touch_down(dev, 1, 40, 50);
-	litest_touch_down(dev, 2, 40, 60);
+	litest_touch_down(dev, 1, 50, 40);
+	litest_touch_down(dev, 2, 60, 40);
 	libinput_dispatch(li);
 	litest_touch_move_three_touches(dev,
 					40, 40,
-					40, 50,
-					40, 60,
+					50, 40,
+					60, 40,
 					0, 30,
 					4, 2);
 
-	litest_wait_for_event(li);
-
+	libinput_dispatch(li);
 	event = libinput_get_event(li);
 	gevent = litest_is_gesture_event(event,
 					 LIBINPUT_EVENT_GESTURE_SWIPE_BEGIN,
@@ -389,6 +1152,63 @@ START_TEST(gestures_time_usec)
 	ck_assert_int_eq(libinput_event_gesture_get_time(gevent),
 			 libinput_event_gesture_get_time_usec(gevent) / 1000);
 	libinput_event_destroy(event);
+}
+END_TEST
+
+START_TEST(gestures_3fg_buttonarea_scroll)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+
+	if (libevdev_get_num_slots(dev->evdev) < 3)
+		return;
+
+	litest_enable_buttonareas(dev);
+	litest_enable_2fg_scroll(dev);
+	litest_drain_events(li);
+
+	litest_touch_down(dev, 0, 40, 20);
+	litest_touch_down(dev, 1, 30, 20);
+	/* third finger in btnarea */
+	litest_touch_down(dev, 2, 50, 99);
+	libinput_dispatch(li);
+	litest_touch_move_two_touches(dev,
+					40, 20,
+					30, 20,
+					0, 40,
+					4, 2);
+
+	litest_touch_up(dev, 0);
+	litest_touch_up(dev, 1);
+	libinput_dispatch(li);
+	litest_assert_scroll(li, LIBINPUT_POINTER_AXIS_SCROLL_VERTICAL, 4);
+}
+END_TEST
+
+START_TEST(gestures_3fg_buttonarea_scroll_btntool)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+
+	if (libevdev_get_num_slots(dev->evdev) > 2)
+		return;
+
+	litest_enable_buttonareas(dev);
+	litest_enable_2fg_scroll(dev);
+	litest_drain_events(li);
+
+	/* first finger in btnarea */
+	litest_touch_down(dev, 0, 20, 99);
+	litest_touch_down(dev, 1, 30, 20);
+	litest_event(dev, EV_KEY, BTN_TOOL_DOUBLETAP, 0);
+	litest_event(dev, EV_KEY, BTN_TOOL_TRIPLETAP, 1);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+	libinput_dispatch(li);
+	litest_touch_move_to(dev, 1, 30, 20, 30, 70, 10, 1);
+
+	litest_touch_up(dev, 1);
+	libinput_dispatch(li);
+	litest_assert_scroll(li, LIBINPUT_POINTER_AXIS_SCROLL_VERTICAL, 4);
 }
 END_TEST
 
@@ -402,8 +1222,18 @@ litest_setup_tests(void)
 	litest_add("gestures:cap", gestures_nocap, LITEST_ANY, LITEST_TOUCHPAD);
 
 	litest_add_ranged("gestures:swipe", gestures_swipe_3fg, LITEST_TOUCHPAD, LITEST_SINGLE_TOUCH, &cardinals);
+	litest_add_ranged("gestures:swipe", gestures_swipe_3fg_btntool, LITEST_TOUCHPAD, LITEST_SINGLE_TOUCH, &cardinals);
+	litest_add_ranged("gestures:swipe", gestures_swipe_4fg, LITEST_TOUCHPAD, LITEST_SINGLE_TOUCH, &cardinals);
+	litest_add_ranged("gestures:swipe", gestures_swipe_4fg_btntool, LITEST_TOUCHPAD, LITEST_SINGLE_TOUCH, &cardinals);
 	litest_add_ranged("gestures:pinch", gestures_pinch, LITEST_TOUCHPAD, LITEST_SINGLE_TOUCH, &cardinals);
+	litest_add_ranged("gestures:pinch", gestures_pinch_3fg, LITEST_TOUCHPAD, LITEST_SINGLE_TOUCH, &cardinals);
+	litest_add_ranged("gestures:pinch", gestures_pinch_3fg_btntool, LITEST_TOUCHPAD, LITEST_SINGLE_TOUCH, &cardinals);
+	litest_add_ranged("gestures:pinch", gestures_pinch_4fg, LITEST_TOUCHPAD, LITEST_SINGLE_TOUCH, &cardinals);
+	litest_add_ranged("gestures:pinch", gestures_pinch_4fg_btntool, LITEST_TOUCHPAD, LITEST_SINGLE_TOUCH, &cardinals);
 	litest_add_ranged("gestures:pinch", gestures_spread, LITEST_TOUCHPAD, LITEST_SINGLE_TOUCH, &cardinals);
+
+	litest_add("gestures:swipe", gestures_3fg_buttonarea_scroll, LITEST_CLICKPAD, LITEST_SINGLE_TOUCH);
+	litest_add("gestures:swipe", gestures_3fg_buttonarea_scroll_btntool, LITEST_CLICKPAD, LITEST_SINGLE_TOUCH);
 
 	litest_add("gesture:time", gestures_time_usec, LITEST_TOUCHPAD, LITEST_SINGLE_TOUCH);
 }

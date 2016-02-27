@@ -139,7 +139,7 @@ START_TEST(touchpad_2fg_scroll)
 	litest_assert_scroll(li, LIBINPUT_POINTER_AXIS_SCROLL_HORIZONTAL, -10);
 
 	/* 2fg scroll smaller than the threshold should not generate events */
-	test_2fg_scroll(dev, 0.1, 0.1, 200);
+	test_2fg_scroll(dev, 0.1, 0.1, 1);
 	litest_assert_empty_queue(li);
 }
 END_TEST
@@ -289,11 +289,11 @@ START_TEST(touchpad_2fg_scroll_semi_mt)
 	litest_touch_down(dev, 0, 20, 20);
 	litest_touch_down(dev, 1, 30, 20);
 	libinput_dispatch(li);
-	litest_touch_move_to(dev, 1, 30, 20, 30, 70, 10, 5);
-
-	litest_assert_empty_queue(li);
-
-	litest_touch_move_to(dev, 0, 20, 20, 20, 70, 10, 5);
+	litest_touch_move_two_touches(dev,
+				      20, 20,
+				      30, 20,
+				      30, 40,
+				      10, 1);
 
 	litest_assert_only_typed_events(li, LIBINPUT_EVENT_POINTER_AXIS);
 }
