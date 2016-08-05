@@ -2012,9 +2012,9 @@ START_TEST(tool_ref)
 	ck_assert_notnull(tool);
 	ck_assert(tool == libinput_tablet_tool_ref(tool));
 	ck_assert(tool == libinput_tablet_tool_unref(tool));
-	ck_assert(libinput_tablet_tool_unref(tool) == NULL);
-
 	libinput_event_destroy(event);
+
+	ck_assert(libinput_tablet_tool_unref(tool) == NULL);
 }
 END_TEST
 
@@ -2532,7 +2532,7 @@ START_TEST(airbrush_tool)
 }
 END_TEST
 
-START_TEST(airbrush_wheel)
+START_TEST(airbrush_slider)
 {
 	struct litest_device *dev = litest_current_device();
 	struct libinput *li = dev->libinput;
@@ -2541,6 +2541,7 @@ START_TEST(airbrush_wheel)
 	const struct input_absinfo *abs;
 	double val;
 	double scale;
+	double expected;
 	int v;
 
 	if (!libevdev_has_event_code(dev->evdev,
@@ -2574,7 +2575,10 @@ START_TEST(airbrush_wheel)
 		ck_assert(libinput_event_tablet_tool_slider_has_changed(tev));
 		val = libinput_event_tablet_tool_get_slider_position(tev);
 
-		ck_assert_int_eq(val, (v - abs->minimum)/scale);
+		expected = ((v - abs->minimum)/scale) * 2 - 1;
+		ck_assert_double_eq(val, expected);
+		ck_assert_double_ge(val, -1.0);
+		ck_assert_double_le(val, 1.0);
 		libinput_event_destroy(event);
 		litest_assert_empty_queue(li);
 	}
@@ -2679,6 +2683,7 @@ START_TEST(tablet_time_usec)
 		{ ABS_PRESSURE, 0 },
 		{ -1, -1 }
 	};
+	uint64_t time_usec;
 
 	litest_drain_events(li);
 
@@ -2688,8 +2693,9 @@ START_TEST(tablet_time_usec)
 	event = libinput_get_event(li);
 	tev = litest_is_tablet_event(event,
 				     LIBINPUT_EVENT_TABLET_TOOL_PROXIMITY);
+	time_usec = libinput_event_tablet_tool_get_time_usec(tev);
 	ck_assert_int_eq(libinput_event_tablet_tool_get_time(tev),
-			 libinput_event_tablet_tool_get_time_usec(tev) / 1000);
+			 (uint32_t) (time_usec / 1000));
 	libinput_event_destroy(event);
 }
 END_TEST
@@ -3100,6 +3106,39 @@ static void pressure_threshold_warning(struct libinput *libinput,
 		(*warning_triggered)++;
 }
 
+START_TEST(tablet_pressure_range)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+	struct libinput_event *event;
+	struct libinput_event_tablet_tool *tev;
+	struct axis_replacement axes[] = {
+		{ ABS_DISTANCE, 0 },
+		{ ABS_PRESSURE, 10 },
+		{ -1, -1 },
+	};
+	int pressure;
+	double p;
+
+	litest_tablet_proximity_in(dev, 5, 100, axes);
+	litest_drain_events(li);
+	libinput_dispatch(li);
+
+	for (pressure = 1; pressure <= 100; pressure += 10) {
+		litest_axis_set_value(axes, ABS_PRESSURE, pressure);
+		litest_tablet_motion(dev, 70, 70, axes);
+		libinput_dispatch(li);
+
+		event = libinput_get_event(li);
+		tev = litest_is_tablet_event(event, LIBINPUT_EVENT_TABLET_TOOL_AXIS);
+		p = libinput_event_tablet_tool_get_pressure(tev);
+		ck_assert_double_ge(p, 0.0);
+		ck_assert_double_le(p, 1.0);
+		libinput_event_destroy(event);
+	}
+}
+END_TEST
+
 START_TEST(tablet_pressure_offset_exceed_threshold)
 {
 	struct litest_device *dev = litest_current_device();
@@ -3203,6 +3242,39 @@ START_TEST(tablet_pressure_offset_none_for_small_distance)
 	ck_assert_double_gt(pressure, 0.0);
 
 	libinput_event_destroy(event);
+}
+END_TEST
+
+START_TEST(tablet_distance_range)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+	struct libinput_event *event;
+	struct libinput_event_tablet_tool *tev;
+	struct axis_replacement axes[] = {
+		{ ABS_DISTANCE, 20 },
+		{ ABS_PRESSURE, 0 },
+		{ -1, -1 },
+	};
+	int distance;
+	double dist;
+
+	litest_tablet_proximity_in(dev, 5, 100, axes);
+	litest_drain_events(li);
+	libinput_dispatch(li);
+
+	for (distance = 0; distance <= 100; distance += 10) {
+		litest_axis_set_value(axes, ABS_DISTANCE, distance);
+		litest_tablet_motion(dev, 70, 70, axes);
+		libinput_dispatch(li);
+
+		event = libinput_get_event(li);
+		tev = litest_is_tablet_event(event, LIBINPUT_EVENT_TABLET_TOOL_AXIS);
+		dist = libinput_event_tablet_tool_get_distance(tev);
+		ck_assert_double_ge(dist, 0.0);
+		ck_assert_double_le(dist, 1.0);
+		libinput_event_destroy(event);
+	}
 }
 END_TEST
 
@@ -3655,7 +3727,7 @@ litest_setup_tests(void)
 	litest_add("tablet:mouse", mouse_rotation, LITEST_TABLET, LITEST_ANY);
 	litest_add("tablet:mouse", mouse_wheel, LITEST_TABLET, LITEST_WHEEL);
 	litest_add("tablet:airbrush", airbrush_tool, LITEST_TABLET, LITEST_ANY);
-	litest_add("tablet:airbrush", airbrush_wheel, LITEST_TABLET, LITEST_ANY);
+	litest_add("tablet:airbrush", airbrush_slider, LITEST_TABLET, LITEST_ANY);
 	litest_add("tablet:artpen", artpen_tool, LITEST_TABLET, LITEST_ANY);
 	litest_add("tablet:artpen", artpen_rotation, LITEST_TABLET, LITEST_ANY);
 
@@ -3666,12 +3738,14 @@ litest_setup_tests(void)
 	litest_add("tablet:calibration", tablet_calibration_set_matrix, LITEST_TABLET, LITEST_ANY);
 	litest_add("tablet:calibration", tablet_calibration_set_matrix_delta, LITEST_TABLET, LITEST_ANY);
 
+	litest_add_for_device("tablet:pressure", tablet_pressure_range, LITEST_WACOM_INTUOS);
 	litest_add_for_device("tablet:pressure", tablet_pressure_offset, LITEST_WACOM_INTUOS);
 	litest_add_for_device("tablet:pressure", tablet_pressure_offset_decrease, LITEST_WACOM_INTUOS);
 	litest_add_for_device("tablet:pressure", tablet_pressure_offset_increase, LITEST_WACOM_INTUOS);
 	litest_add_for_device("tablet:pressure", tablet_pressure_offset_exceed_threshold, LITEST_WACOM_INTUOS);
 	litest_add_for_device("tablet:pressure", tablet_pressure_offset_none_for_zero_distance, LITEST_WACOM_INTUOS);
 	litest_add_for_device("tablet:pressure", tablet_pressure_offset_none_for_small_distance, LITEST_WACOM_INTUOS);
+	litest_add_for_device("tablet:distance", tablet_distance_range, LITEST_WACOM_INTUOS);
 
 	litest_add("tablet:relative", relative_no_profile, LITEST_TABLET, LITEST_ANY);
 	litest_add("tablet:relative", relative_no_delta_prox_in, LITEST_TABLET, LITEST_ANY);

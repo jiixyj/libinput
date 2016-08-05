@@ -41,6 +41,7 @@ enum touchpad_event {
 	TOUCHPAD_EVENT_MOTION		= (1 << 0),
 	TOUCHPAD_EVENT_BUTTON_PRESS	= (1 << 1),
 	TOUCHPAD_EVENT_BUTTON_RELEASE	= (1 << 2),
+	TOUCHPAD_EVENT_OTHERAXIS	= (1 << 3),
 };
 
 enum touchpad_model {
@@ -69,6 +70,7 @@ enum touch_palm_state {
 
 enum button_event {
 	BUTTON_EVENT_IN_BOTTOM_R = 30,
+	BUTTON_EVENT_IN_BOTTOM_M,
 	BUTTON_EVENT_IN_BOTTOM_L,
 	BUTTON_EVENT_IN_TOP_R,
 	BUTTON_EVENT_IN_TOP_M,
@@ -242,6 +244,11 @@ struct tp_dispatch {
 	struct device_coords hysteresis_margin;
 
 	struct {
+		struct device_coords min, max;
+		struct ratelimit range_warn_limit;
+	} warning_range;
+
+	struct {
 		double x_scale_coeff;
 		double y_scale_coeff;
 	} accel;
@@ -282,6 +289,7 @@ struct tp_dispatch {
 		struct {
 			int32_t top_edge;	/* in device coordinates */
 			int32_t rightbutton_left_edge; /* in device coordinates */
+			int32_t middlebutton_left_edge; /* in device coordinates */
 		} bottom_area;
 
 		struct {
@@ -353,6 +361,17 @@ struct tp_dispatch {
 		int upper_thumb_line;
 		int lower_thumb_line;
 	} thumb;
+
+	struct {
+		/* A quirk used on the T450 series Synaptics hardware.
+		 * Slowly moving the finger causes multiple events with only
+		 * ABS_MT_PRESSURE but no x/y information. When the x/y
+		 * event comes, it will be a jump of ~20 units. We use the
+		 * below to count non-motion events to discard that first
+		 * event with the jump.
+		 */
+		unsigned int nonmotion_event_count;
+	} quirks;
 };
 
 #define tp_for_each_touch(_tp, _t) \
@@ -361,7 +380,7 @@ struct tp_dispatch {
 static inline struct libinput*
 tp_libinput_context(const struct tp_dispatch *tp)
 {
-	return tp->device->base.seat->libinput;
+	return evdev_libinput_context(tp->device);
 }
 
 static inline struct normalized_coords
@@ -507,5 +526,8 @@ tp_gesture_stop_twofinger_scroll(struct tp_dispatch *tp, uint64_t time);
 
 bool
 tp_palm_tap_is_palm(const struct tp_dispatch *tp, const struct tp_touch *t);
+
+void
+tp_clickpad_middlebutton_apply_config(struct evdev_device *device);
 
 #endif

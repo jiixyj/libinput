@@ -45,7 +45,7 @@ enum tablet_status {
 };
 
 struct button_state {
-	unsigned char stylus_buttons[NCHARS(KEY_CNT)];
+	unsigned char bits[NCHARS(KEY_CNT)];
 };
 
 struct tablet_dispatch {
@@ -55,6 +55,8 @@ struct tablet_dispatch {
 	unsigned char changed_axes[NCHARS(LIBINPUT_TABLET_TOOL_AXIS_MAX + 1)];
 	struct tablet_axes axes;
 	unsigned char axis_caps[NCHARS(LIBINPUT_TABLET_TOOL_AXIS_MAX + 1)];
+	int current_value[LIBINPUT_TABLET_TOOL_AXIS_MAX + 1];
+	int prev_value[LIBINPUT_TABLET_TOOL_AXIS_MAX + 1];
 
 	/* Only used for tablets that don't report serial numbers */
 	struct list tool_list;
@@ -199,6 +201,12 @@ tablet_tool_type_to_string(enum libinput_tablet_tool_type type)
 	}
 
 	return str;
+}
+
+static inline struct libinput *
+tablet_libinput_context(const struct tablet_dispatch *tablet)
+{
+	return evdev_libinput_context(tablet->device);
 }
 
 #endif

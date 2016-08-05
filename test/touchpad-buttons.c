@@ -987,6 +987,35 @@ START_TEST(clickpad_softbutton_left)
 }
 END_TEST
 
+START_TEST(clickpad_softbutton_middle)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+
+	litest_drain_events(li);
+
+	litest_touch_down(dev, 0, 50, 90);
+	litest_event(dev, EV_KEY, BTN_LEFT, 1);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+
+	litest_assert_button_event(li,
+				   BTN_MIDDLE,
+				   LIBINPUT_BUTTON_STATE_PRESSED);
+
+	litest_event(dev, EV_KEY, BTN_LEFT, 0);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+	litest_touch_up(dev, 0);
+
+	litest_assert_button_event(li,
+				   BTN_MIDDLE,
+				   LIBINPUT_BUTTON_STATE_RELEASED);
+
+	libinput_dispatch(li);
+
+	litest_assert_empty_queue(li);
+}
+END_TEST
+
 START_TEST(clickpad_softbutton_right)
 {
 	struct litest_device *dev = litest_current_device();
@@ -1549,6 +1578,232 @@ START_TEST(clickpad_topsoftbuttons_clickfinger_dev_disabled)
 }
 END_TEST
 
+START_TEST(clickpad_middleemulation_config_delayed)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput_device *device = dev->libinput_device;
+	struct libinput *li = dev->libinput;
+	enum libinput_config_status status;
+	int enabled;
+
+	enabled = libinput_device_config_middle_emulation_get_enabled(device);
+	ck_assert(!enabled);
+
+	litest_touch_down(dev, 0, 30, 95);
+	litest_event(dev, EV_KEY, BTN_LEFT, 1);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+	libinput_dispatch(li);
+
+	/* actual config is delayed, but status is immediate */
+	status = libinput_device_config_middle_emulation_set_enabled(device,
+				LIBINPUT_CONFIG_MIDDLE_EMULATION_ENABLED);
+	ck_assert_int_eq(status, LIBINPUT_CONFIG_STATUS_SUCCESS);
+
+	enabled = libinput_device_config_middle_emulation_get_enabled(device);
+	ck_assert(enabled);
+
+	status = libinput_device_config_middle_emulation_set_enabled(device,
+				LIBINPUT_CONFIG_MIDDLE_EMULATION_DISABLED);
+	ck_assert_int_eq(status, LIBINPUT_CONFIG_STATUS_SUCCESS);
+	enabled = libinput_device_config_middle_emulation_get_enabled(device);
+	ck_assert(!enabled);
+}
+END_TEST
+
+START_TEST(clickpad_middleemulation_click)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+
+	litest_enable_buttonareas(dev);
+	litest_enable_middleemu(dev);
+	litest_drain_events(li);
+
+	litest_touch_down(dev, 0, 30, 95);
+	litest_touch_down(dev, 1, 80, 95);
+	litest_event(dev, EV_KEY, BTN_LEFT, 1);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+
+	litest_assert_button_event(li,
+				   BTN_MIDDLE,
+				   LIBINPUT_BUTTON_STATE_PRESSED);
+
+	litest_event(dev, EV_KEY, BTN_LEFT, 0);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+	litest_touch_up(dev, 0);
+	litest_touch_up(dev, 1);
+
+	litest_assert_button_event(li,
+				   BTN_MIDDLE,
+				   LIBINPUT_BUTTON_STATE_RELEASED);
+
+	libinput_dispatch(li);
+
+	litest_assert_empty_queue(li);
+}
+END_TEST
+
+START_TEST(clickpad_middleemulation_click_middle_left)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+
+	litest_enable_buttonareas(dev);
+	litest_enable_middleemu(dev);
+	litest_drain_events(li);
+
+	litest_touch_down(dev, 0, 49, 95);
+	litest_event(dev, EV_KEY, BTN_LEFT, 1);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+
+	litest_assert_button_event(li,
+				   BTN_LEFT,
+				   LIBINPUT_BUTTON_STATE_PRESSED);
+
+	litest_event(dev, EV_KEY, BTN_LEFT, 0);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+	litest_touch_up(dev, 0);
+
+	litest_assert_button_event(li,
+				   BTN_LEFT,
+				   LIBINPUT_BUTTON_STATE_RELEASED);
+
+	libinput_dispatch(li);
+
+	litest_assert_empty_queue(li);
+}
+END_TEST
+
+START_TEST(clickpad_middleemulation_click_middle_right)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+
+	litest_enable_buttonareas(dev);
+	litest_enable_middleemu(dev);
+	litest_drain_events(li);
+
+	litest_touch_down(dev, 0, 51, 95);
+	litest_event(dev, EV_KEY, BTN_LEFT, 1);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+
+	litest_assert_button_event(li,
+				   BTN_RIGHT,
+				   LIBINPUT_BUTTON_STATE_PRESSED);
+
+	litest_event(dev, EV_KEY, BTN_LEFT, 0);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+	litest_touch_up(dev, 0);
+
+	litest_assert_button_event(li,
+				   BTN_RIGHT,
+				   LIBINPUT_BUTTON_STATE_RELEASED);
+
+	libinput_dispatch(li);
+
+	litest_assert_empty_queue(li);
+}
+END_TEST
+
+START_TEST(clickpad_middleemulation_click_enable_while_down)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+
+	litest_enable_buttonareas(dev);
+	litest_drain_events(li);
+
+	litest_touch_down(dev, 0, 49, 95);
+	litest_event(dev, EV_KEY, BTN_LEFT, 1);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+
+	litest_assert_button_event(li,
+				   BTN_MIDDLE,
+				   LIBINPUT_BUTTON_STATE_PRESSED);
+
+	litest_enable_middleemu(dev);
+
+	litest_event(dev, EV_KEY, BTN_LEFT, 0);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+	litest_touch_up(dev, 0);
+
+	litest_assert_button_event(li,
+				   BTN_MIDDLE,
+				   LIBINPUT_BUTTON_STATE_RELEASED);
+
+	libinput_dispatch(li);
+
+	litest_assert_empty_queue(li);
+
+	litest_touch_down(dev, 0, 49, 95);
+	litest_event(dev, EV_KEY, BTN_LEFT, 1);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+	litest_event(dev, EV_KEY, BTN_LEFT, 0);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+	litest_touch_up(dev, 0);
+
+	litest_assert_button_event(li,
+				   BTN_LEFT,
+				   LIBINPUT_BUTTON_STATE_PRESSED);
+	litest_assert_button_event(li,
+				   BTN_LEFT,
+				   LIBINPUT_BUTTON_STATE_RELEASED);
+
+	libinput_dispatch(li);
+}
+END_TEST
+
+START_TEST(clickpad_middleemulation_click_disable_while_down)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+
+	litest_enable_buttonareas(dev);
+	litest_enable_middleemu(dev);
+
+	litest_drain_events(li);
+
+	litest_touch_down(dev, 0, 30, 95);
+	litest_touch_down(dev, 1, 70, 95);
+	litest_event(dev, EV_KEY, BTN_LEFT, 1);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+
+	litest_assert_button_event(li,
+				   BTN_MIDDLE,
+				   LIBINPUT_BUTTON_STATE_PRESSED);
+
+	litest_disable_middleemu(dev);
+
+	litest_event(dev, EV_KEY, BTN_LEFT, 0);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+	litest_touch_up(dev, 0);
+	litest_touch_up(dev, 1);
+
+	litest_assert_button_event(li,
+				   BTN_MIDDLE,
+				   LIBINPUT_BUTTON_STATE_RELEASED);
+	libinput_dispatch(li);
+
+	litest_assert_empty_queue(li);
+
+	litest_touch_down(dev, 0, 49, 95);
+	litest_event(dev, EV_KEY, BTN_LEFT, 1);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+	litest_event(dev, EV_KEY, BTN_LEFT, 0);
+	litest_event(dev, EV_SYN, SYN_REPORT, 0);
+	litest_touch_up(dev, 0);
+
+	litest_assert_button_event(li,
+				   BTN_MIDDLE,
+				   LIBINPUT_BUTTON_STATE_PRESSED);
+	litest_assert_button_event(li,
+				   BTN_MIDDLE,
+				   LIBINPUT_BUTTON_STATE_RELEASED);
+
+	libinput_dispatch(li);
+}
+END_TEST
+
 void
 litest_setup_tests(void)
 {
@@ -1585,6 +1840,7 @@ litest_setup_tests(void)
 	litest_add("touchpad:click", clickpad_finger_pin, LITEST_CLICKPAD, LITEST_ANY);
 
 	litest_add("touchpad:softbutton", clickpad_softbutton_left, LITEST_CLICKPAD, LITEST_APPLE_CLICKPAD);
+	litest_add("touchpad:softbutton", clickpad_softbutton_middle, LITEST_CLICKPAD, LITEST_APPLE_CLICKPAD);
 	litest_add("touchpad:softbutton", clickpad_softbutton_right, LITEST_CLICKPAD, LITEST_APPLE_CLICKPAD);
 	litest_add("touchpad:softbutton", clickpad_softbutton_left_tap_n_drag, LITEST_CLICKPAD, LITEST_APPLE_CLICKPAD);
 	litest_add("touchpad:softbutton", clickpad_softbutton_right_tap_n_drag, LITEST_CLICKPAD, LITEST_APPLE_CLICKPAD);
@@ -1599,4 +1855,11 @@ litest_setup_tests(void)
 	litest_add("touchpad:topsoftbuttons", clickpad_topsoftbuttons_move_out_ignore, LITEST_TOPBUTTONPAD, LITEST_ANY);
 	litest_add("touchpad:topsoftbuttons", clickpad_topsoftbuttons_clickfinger, LITEST_TOPBUTTONPAD, LITEST_ANY);
 	litest_add("touchpad:topsoftbuttons", clickpad_topsoftbuttons_clickfinger_dev_disabled, LITEST_TOPBUTTONPAD, LITEST_ANY);
+
+	litest_add("touchpad:middleemulation", clickpad_middleemulation_config_delayed, LITEST_CLICKPAD, LITEST_ANY);
+	litest_add("touchpad:middleemulation", clickpad_middleemulation_click, LITEST_CLICKPAD, LITEST_ANY);
+	litest_add("touchpad:middleemulation", clickpad_middleemulation_click_middle_left, LITEST_CLICKPAD, LITEST_ANY);
+	litest_add("touchpad:middleemulation", clickpad_middleemulation_click_middle_right, LITEST_CLICKPAD, LITEST_ANY);
+	litest_add("touchpad:middleemulation", clickpad_middleemulation_click_enable_while_down, LITEST_CLICKPAD, LITEST_ANY);
+	litest_add("touchpad:middleemulation", clickpad_middleemulation_click_disable_while_down, LITEST_CLICKPAD, LITEST_ANY);
 }

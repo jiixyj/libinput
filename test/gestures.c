@@ -961,13 +961,13 @@ START_TEST(gestures_pinch_4fg_btntool)
 	for (i = 0; i < 8; i++) {
 		litest_push_event_frame(dev);
 		if (dir_x > 0.0)
-			dir_x -= 2;
+			dir_x -= 3;
 		else if (dir_x < 0.0)
-			dir_x += 2;
+			dir_x += 3;
 		if (dir_y > 0.0)
-			dir_y -= 2;
+			dir_y -= 3;
 		else if (dir_y < 0.0)
-			dir_y += 2;
+			dir_y += 3;
 		litest_touch_move(dev,
 				  0,
 				  50 + dir_x,
@@ -1004,7 +1004,7 @@ START_TEST(gestures_pinch_4fg_btntool)
 		ck_assert(scale < oldscale);
 
 		angle = libinput_event_gesture_get_angle_delta(gevent);
-		ck_assert_double_le(fabs(angle), 1.0);
+		ck_assert_double_le(fabs(angle), 1.5);
 
 		libinput_event_destroy(event);
 		libinput_dispatch(li);
@@ -1127,6 +1127,7 @@ START_TEST(gestures_time_usec)
 	struct libinput *li = dev->libinput;
 	struct libinput_event *event;
 	struct libinput_event_gesture *gevent;
+	uint64_t time_usec;
 
 	if (libevdev_get_num_slots(dev->evdev) < 3)
 		return;
@@ -1142,15 +1143,16 @@ START_TEST(gestures_time_usec)
 					50, 40,
 					60, 40,
 					0, 30,
-					4, 2);
+					10, 2);
 
 	libinput_dispatch(li);
 	event = libinput_get_event(li);
 	gevent = litest_is_gesture_event(event,
 					 LIBINPUT_EVENT_GESTURE_SWIPE_BEGIN,
 					 3);
+	time_usec = libinput_event_gesture_get_time_usec(gevent);
 	ck_assert_int_eq(libinput_event_gesture_get_time(gevent),
-			 libinput_event_gesture_get_time_usec(gevent) / 1000);
+			 (uint32_t) (time_usec / 1000));
 	libinput_event_destroy(event);
 }
 END_TEST
@@ -1176,7 +1178,7 @@ START_TEST(gestures_3fg_buttonarea_scroll)
 					40, 20,
 					30, 20,
 					0, 40,
-					4, 2);
+					10, 2);
 
 	litest_touch_up(dev, 0);
 	litest_touch_up(dev, 1);

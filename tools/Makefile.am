@@ -18,7 +18,7 @@ event_debug_LDFLAGS = -no-install
 event_debug_CFLAGS = $(LIBUDEV_CFLAGS) $(LIBEVDEV_CFLAGS)
 
 ptraccel_debug_SOURCES = ptraccel-debug.c
-ptraccel_debug_LDADD = ../src/libfilter.la $(LIBUDEV_LIBS)
+ptraccel_debug_LDADD = ../src/libfilter.la ../src/libinput.la $(LIBUDEV_LIBS)
 ptraccel_debug_LDFLAGS = -no-install
 ptraccel_debug_CFLAGS = $(LIBUDEV_CFLAGS)
 

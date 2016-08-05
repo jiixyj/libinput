@@ -27,6 +27,7 @@
 
 #include <assert.h>
 #include <unistd.h>
+#include <limits.h>
 #include <math.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -37,6 +38,7 @@
 #include "libinput.h"
 
 #define VENDOR_ID_APPLE 0x5ac
+#define VENDOR_ID_LOGITECH 0x46d
 #define VENDOR_ID_WACOM 0x56a
 #define VENDOR_ID_SYNAPTICS_SERIAL 0x002
 #define PRODUCT_ID_APPLE_KBD_TOUCHPAD 0x273
@@ -85,6 +87,7 @@ int list_empty(const struct list *list);
 	     pos = tmp,							\
 	     tmp = container_of(pos->member.next, tmp, member))
 
+#define NBITS(b) (b * 8)
 #define LONG_BITS (sizeof(long) * 8)
 #define NLONGS(x) (((x) + LONG_BITS - 1) / LONG_BITS)
 #define ARRAY_LENGTH(a) (sizeof (a) / sizeof (a)[0])
@@ -124,19 +127,19 @@ zalloc(size_t size)
 static inline int
 bit_is_set(const unsigned char *array, int bit)
 {
-    return !!(array[bit / 8] & (1 << (bit % 8)));
+	return !!(array[bit / 8] & (1 << (bit % 8)));
 }
 
-static inline void
+	static inline void
 set_bit(unsigned char *array, int bit)
 {
-    array[bit / 8] |= (1 << (bit % 8));
+	array[bit / 8] |= (1 << (bit % 8));
 }
 
-static inline void
+	static inline void
 clear_bit(unsigned char *array, int bit)
 {
-    array[bit / 8] &= ~(1 << (bit % 8));
+	array[bit / 8] &= ~(1 << (bit % 8));
 }
 
 static inline void
@@ -185,6 +188,12 @@ long_any_bit_set(unsigned long *array, size_t size)
 	return 0;
 }
 
+static inline double
+deg2rad(int degree)
+{
+	return M_PI * degree / 180.0;
+}
+
 struct matrix {
 	float val[3][3]; /* [row][col] */
 };
@@ -226,8 +235,23 @@ matrix_init_translate(struct matrix *m, float x, float y)
 	m->val[1][2] = y;
 }
 
+static inline void
+matrix_init_rotate(struct matrix *m, int degrees)
+{
+	double s, c;
+
+	s = sin(deg2rad(degrees));
+	c = cos(deg2rad(degrees));
+
+	matrix_init_identity(m);
+	m->val[0][0] = c;
+	m->val[0][1] = -s;
+	m->val[1][0] = s;
+	m->val[1][1] = c;
+}
+
 static inline int
-matrix_is_identity(struct matrix *m)
+matrix_is_identity(const struct matrix *m)
 {
 	return (m->val[0][0] == 1 &&
 		m->val[0][1] == 0 &&
@@ -262,7 +286,7 @@ matrix_mult(struct matrix *dest,
 }
 
 static inline void
-matrix_mult_vec(struct matrix *m, int *x, int *y)
+matrix_mult_vec(const struct matrix *m, int *x, int *y)
 {
 	int tx, ty;
 
@@ -375,6 +399,25 @@ static inline uint32_t
 us2ms(uint64_t us)
 {
 	return (uint32_t)(us / 1000);
+}
+
+static inline bool
+safe_atoi(const char *str, int *val)
+{
+        char *endptr;
+        long v;
+
+        v = strtol(str, &endptr, 10);
+        if (str == endptr)
+                return false;
+        if (*str != '\0' && *endptr != '\0')
+                return false;
+
+        if (v > INT_MAX || v < INT_MIN)
+                return false;
+
+        *val = v;
+        return true;
 }
 
 #endif /* LIBINPUT_UTIL_H */

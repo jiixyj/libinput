@@ -317,6 +317,7 @@ START_TEST(keyboard_time_usec)
 	struct libinput *li = dev->libinput;
 	struct libinput_event_keyboard *kev;
 	struct libinput_event *event;
+	uint64_t time_usec;
 
 	if (!libevdev_has_event_code(dev->evdev, EV_KEY, KEY_A))
 		return;
@@ -332,11 +333,48 @@ START_TEST(keyboard_time_usec)
 				       KEY_A,
 				       LIBINPUT_KEY_STATE_PRESSED);
 
+	time_usec = libinput_event_keyboard_get_time_usec(kev);
 	ck_assert_int_eq(libinput_event_keyboard_get_time(kev),
-			 libinput_event_keyboard_get_time_usec(kev) / 1000);
+			 (uint32_t) (time_usec / 1000));
 
 	libinput_event_destroy(event);
 	litest_drain_events(dev->libinput);
+}
+END_TEST
+
+START_TEST(keyboard_no_buttons)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+	struct libinput_event *event;
+	int code;
+	const char *name;
+
+	litest_drain_events(dev->libinput);
+
+	for (code = 0; code < KEY_MAX; code++) {
+		if (!libevdev_has_event_code(dev->evdev, EV_KEY, code))
+			continue;
+
+		name = libevdev_event_code_get_name(EV_KEY, code);
+		if (!name || !strneq(name, "KEY_", 4))
+			continue;
+
+		litest_keyboard_key(dev, code, true);
+		litest_keyboard_key(dev, code, false);
+		libinput_dispatch(li);
+
+		event = libinput_get_event(li);
+		litest_is_keyboard_event(event,
+					 code,
+					 LIBINPUT_KEY_STATE_PRESSED);
+		libinput_event_destroy(event);
+		event = libinput_get_event(li);
+		litest_is_keyboard_event(event,
+					 code,
+					 LIBINPUT_KEY_STATE_RELEASED);
+		libinput_event_destroy(event);
+	}
 }
 END_TEST
 
@@ -349,4 +387,6 @@ litest_setup_tests(void)
 	litest_add("keyboard:keys", keyboard_has_key, LITEST_KEYS, LITEST_ANY);
 	litest_add("keyboard:keys", keyboard_keys_bad_device, LITEST_ANY, LITEST_ANY);
 	litest_add("keyboard:time", keyboard_time_usec, LITEST_KEYS, LITEST_ANY);
+
+	litest_add("keyboard:events", keyboard_no_buttons, LITEST_KEYS, LITEST_ANY);
 }

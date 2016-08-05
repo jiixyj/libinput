@@ -379,6 +379,16 @@ extern struct litest_test_device litest_cyborg_rat_device;
 extern struct litest_test_device litest_yubikey_device;
 extern struct litest_test_device litest_synaptics_i2c_device;
 extern struct litest_test_device litest_wacom_cintiq_24hd_device;
+extern struct litest_test_device litest_multitouch_fuzz_screen_device;
+extern struct litest_test_device litest_wacom_intuos3_pad_device;
+extern struct litest_test_device litest_wacom_intuos5_pad_device;
+extern struct litest_test_device litest_keyboard_all_codes_device;
+extern struct litest_test_device litest_magicmouse_device;
+extern struct litest_test_device litest_wacom_ekr_device;
+extern struct litest_test_device litest_wacom_cintiq_24hdt_pad_device;
+extern struct litest_test_device litest_wacom_cintiq_13hdt_finger_device;
+extern struct litest_test_device litest_wacom_cintiq_13hdt_pen_device;
+extern struct litest_test_device litest_wacom_cintiq_13hdt_pad_device;
 
 struct litest_test_device* devices[] = {
 	&litest_synaptics_clickpad_device,
@@ -424,6 +434,16 @@ struct litest_test_device* devices[] = {
 	&litest_yubikey_device,
 	&litest_synaptics_i2c_device,
 	&litest_wacom_cintiq_24hd_device,
+	&litest_multitouch_fuzz_screen_device,
+	&litest_wacom_intuos3_pad_device,
+	&litest_wacom_intuos5_pad_device,
+	&litest_keyboard_all_codes_device,
+	&litest_magicmouse_device,
+	&litest_wacom_ekr_device,
+	&litest_wacom_cintiq_24hdt_pad_device,
+	&litest_wacom_cintiq_13hdt_finger_device,
+	&litest_wacom_cintiq_13hdt_pen_device,
+	&litest_wacom_cintiq_13hdt_pad_device,
 	NULL,
 };
 
@@ -1150,6 +1170,58 @@ litest_restore_log_handler(struct libinput *libinput)
 	libinput_log_set_handler(libinput, litest_log_handler);
 }
 
+static inline int
+create_udev_lock_file(void)
+{
+	int lfd;
+
+	/* Running the multiple tests in parallel usually trips over udev
+	 * not being  up-to-date. We change the udev rules for every device
+	 * created, sometimes this means we end up getting the wrong udev
+	 * device, or having wrong properties applied.
+	 *
+	 * litests use the path interface and there is a window between
+	 * creating the device (which triggers udev reloads) and adding the
+	 * device to the libinput context where another udev reload may
+	 * upset things.
+	 *
+	 * To avoid this, create a lockfile on device add and device delete
+	 * to make sure that we have exclusive access to udev while
+	 * the udev rules are reloaded.
+	 */
+	do {
+		lfd = open(LITEST_UDEV_LOCKFILE, O_CREAT|O_EXCL, O_RDWR);
+
+		if (lfd == -1) {
+			struct stat st;
+			time_t now = time(NULL);
+
+			litest_assert_int_eq(errno, EEXIST);
+			msleep(10);
+
+			/* If the lock file is older than 10s, it's a
+			   leftover from some aborted test */
+			if (stat(LITEST_UDEV_LOCKFILE, &st) != -1) {
+				if (st.st_mtime < now - 10) {
+					fprintf(stderr,
+						"Removing stale lock file %s.\n",
+						LITEST_UDEV_LOCKFILE);
+					unlink(LITEST_UDEV_LOCKFILE);
+				}
+			}
+		}
+	} while (lfd < 0);
+
+	return lfd;
+}
+
+static inline void
+delete_udev_lock_file(int lfd)
+{
+	close(lfd);
+	unlink(LITEST_UDEV_LOCKFILE);
+}
+
 struct litest_device *
 litest_add_device_with_overrides(struct libinput *libinput,
 				 enum litest_device_type which,
@@ -1162,6 +1234,8 @@ litest_add_device_with_overrides(struct libinput *libinput,
 	int fd;
 	int rc;
 	const char *path;
+
+	int lfd = create_udev_lock_file();
 
 	d = litest_create(which,
 			  name_override,
@@ -1188,6 +1262,9 @@ litest_add_device_with_overrides(struct libinput *libinput,
 		d->interface->min[ABS_Y] = libevdev_get_abs_minimum(d->evdev, ABS_Y);
 		d->interface->max[ABS_Y] = libevdev_get_abs_maximum(d->evdev, ABS_Y);
 	}
+
+	delete_udev_lock_file(lfd);
+
 	return d;
 }
 
@@ -1244,8 +1321,12 @@ litest_handle_events(struct litest_device *d)
 void
 litest_delete_device(struct litest_device *d)
 {
+	int lfd;
+
 	if (!d)
 		return;
+
+	lfd = create_udev_lock_file();
 
 	if (d->udev_rule_file) {
 		unlink(d->udev_rule_file);
@@ -1264,6 +1345,8 @@ litest_delete_device(struct litest_device *d)
 	free(d->private);
 	memset(d,0, sizeof(*d));
 	free(d);
+
+	delete_udev_lock_file(lfd);
 }
 
 void
@@ -1793,6 +1876,15 @@ litest_scale_axis(const struct litest_device *d,
 	return (abs->maximum - abs->minimum) * val/100.0 + abs->minimum;
 }
 
+static inline int
+litest_scale_range(int min, int max, double val)
+{
+	litest_assert_int_ge((int)val, 0);
+	litest_assert_int_le((int)val, 100);
+
+	return (max - min) * val/100.0 + min;
+}
+
 int
 litest_scale(const struct litest_device *d, unsigned int axis, double val)
 {
@@ -1803,9 +1895,117 @@ litest_scale(const struct litest_device *d, unsigned int axis, double val)
 	if (axis <= ABS_Y) {
 		min = d->interface->min[axis];
 		max = d->interface->max[axis];
-		return (max - min) * val/100.0 + min;
+
+		return litest_scale_range(min, max, val);
 	} else {
 		return litest_scale_axis(d, axis, val);
+	}
+}
+
+static inline int
+auto_assign_pad_value(struct litest_device *dev,
+		      struct input_event *ev,
+		      double value)
+{
+	const struct input_absinfo *abs;
+
+	if (ev->value != LITEST_AUTO_ASSIGN ||
+	    ev->type != EV_ABS)
+		return value;
+
+	abs = libevdev_get_abs_info(dev->evdev, ev->code);
+	litest_assert_notnull(abs);
+
+	if (ev->code == ABS_RX || ev->code == ABS_RY) {
+		double min = abs->minimum != 0 ? log2(abs->minimum) : 0,
+		       max = abs->maximum != 0 ? log2(abs->maximum) : 0;
+
+		/* Value 0 is reserved for finger up, so a value of 0% is
+		 * actually 1 */
+		if (value == 0.0) {
+			return 1;
+		} else {
+			value = litest_scale_range(min, max, value);
+			return pow(2, value);
+		}
+	} else {
+		return litest_scale_range(abs->minimum, abs->maximum, value);
+	}
+}
+
+void
+litest_pad_ring_start(struct litest_device *d, double value)
+{
+	struct input_event *ev;
+
+	ev = d->interface->pad_ring_start_events;
+	while (ev && (int16_t)ev->type != -1 && (int16_t)ev->code != -1) {
+		value = auto_assign_pad_value(d, ev, value);
+		litest_event(d, ev->type, ev->code, value);
+		ev++;
+	}
+}
+
+void
+litest_pad_ring_change(struct litest_device *d, double value)
+{
+	struct input_event *ev;
+
+	ev = d->interface->pad_ring_change_events;
+	while (ev && (int16_t)ev->type != -1 && (int16_t)ev->code != -1) {
+		value = auto_assign_pad_value(d, ev, value);
+		litest_event(d, ev->type, ev->code, value);
+		ev++;
+	}
+}
+
+void
+litest_pad_ring_end(struct litest_device *d)
+{
+	struct input_event *ev;
+
+	ev = d->interface->pad_ring_end_events;
+	while (ev && (int16_t)ev->type != -1 && (int16_t)ev->code != -1) {
+		litest_event(d, ev->type, ev->code, ev->value);
+		ev++;
+	}
+}
+
+void
+litest_pad_strip_start(struct litest_device *d, double value)
+{
+	struct input_event *ev;
+
+	ev = d->interface->pad_strip_start_events;
+	while (ev && (int16_t)ev->type != -1 && (int16_t)ev->code != -1) {
+		value = auto_assign_pad_value(d, ev, value);
+		litest_event(d, ev->type, ev->code, value);
+		ev++;
+	}
+}
+
+void
+litest_pad_strip_change(struct litest_device *d, double value)
+{
+	struct input_event *ev;
+
+	ev = d->interface->pad_strip_change_events;
+	while (ev && (int16_t)ev->type != -1 && (int16_t)ev->code != -1) {
+		value = auto_assign_pad_value(d, ev, value);
+		litest_event(d, ev->type, ev->code, value);
+		ev++;
+	}
+}
+
+void
+litest_pad_strip_end(struct litest_device *d)
+{
+	struct input_event *ev;
+
+	ev = d->interface->pad_strip_end_events;
+	while (ev && (int16_t)ev->type != -1 && (int16_t)ev->code != -1) {
+		litest_event(d, ev->type, ev->code, ev->value);
+		ev++;
 	}
 }
 
@@ -1947,6 +2147,15 @@ litest_event_type_str(struct libinput_event *event)
 	case LIBINPUT_EVENT_TABLET_TOOL_BUTTON:
 		str = "TABLET TOOL BUTTON";
 		break;
+	case LIBINPUT_EVENT_TABLET_PAD_BUTTON:
+		str = "TABLET PAD BUTTON";
+		break;
+	case LIBINPUT_EVENT_TABLET_PAD_RING:
+		str = "TABLET PAD RING";
+		break;
+	case LIBINPUT_EVENT_TABLET_PAD_STRIP:
+		str = "TABLET PAD STRIP";
+		break;
 	}
 	return str;
 }
@@ -1956,6 +2165,7 @@ litest_print_event(struct libinput_event *event)
 {
 	struct libinput_event_pointer *p;
 	struct libinput_event_tablet_tool *t;
+	struct libinput_event_tablet_pad *pad;
 	struct libinput_device *dev;
 	enum libinput_event_type type;
 	double x, y;
@@ -2003,19 +2213,39 @@ litest_print_event(struct libinput_event *event)
 		break;
 	case LIBINPUT_EVENT_TABLET_TOOL_PROXIMITY:
 		t = libinput_event_get_tablet_tool_event(event);
-		fprintf(stderr, "proximity %d\n",
+		fprintf(stderr, "proximity %d",
 			libinput_event_tablet_tool_get_proximity_state(t));
 		break;
 	case LIBINPUT_EVENT_TABLET_TOOL_TIP:
 		t = libinput_event_get_tablet_tool_event(event);
-		fprintf(stderr, "tip %d\n",
+		fprintf(stderr, "tip %d",
 			libinput_event_tablet_tool_get_tip_state(t));
 		break;
 	case LIBINPUT_EVENT_TABLET_TOOL_BUTTON:
 		t = libinput_event_get_tablet_tool_event(event);
-		fprintf(stderr, "button %d state %d\n",
+		fprintf(stderr, "button %d state %d",
 			libinput_event_tablet_tool_get_button(t),
 			libinput_event_tablet_tool_get_button_state(t));
+		break;
+	case LIBINPUT_EVENT_TABLET_PAD_BUTTON:
+		pad = libinput_event_get_tablet_pad_event(event);
+		fprintf(stderr, "button %d state %d",
+			libinput_event_tablet_pad_get_button_number(pad),
+			libinput_event_tablet_pad_get_button_state(pad));
+		break;
+	case LIBINPUT_EVENT_TABLET_PAD_RING:
+		pad = libinput_event_get_tablet_pad_event(event);
+		fprintf(stderr, "ring %d position %.2f source %d",
+			libinput_event_tablet_pad_get_ring_number(pad),
+			libinput_event_tablet_pad_get_ring_position(pad),
+			libinput_event_tablet_pad_get_ring_source(pad));
+		break;
+	case LIBINPUT_EVENT_TABLET_PAD_STRIP:
+		pad = libinput_event_get_tablet_pad_event(event);
+		fprintf(stderr, "strip %d position %.2f source %d",
+			libinput_event_tablet_pad_get_ring_number(pad),
+			libinput_event_tablet_pad_get_ring_position(pad),
+			libinput_event_tablet_pad_get_ring_source(pad));
 		break;
 	default:
 		break;
@@ -2057,7 +2287,7 @@ litest_create_uinput(const char *name,
 	const struct input_absinfo default_abs = {
 		.value = 0,
 		.minimum = 0,
-		.maximum = 0xffff,
+		.maximum = 100,
 		.fuzz = 0,
 		.flat = 0,
 		.resolution = 100
@@ -2079,8 +2309,12 @@ litest_create_uinput(const char *name,
 
 	abs = abs_info;
 	while (abs && abs->value != -1) {
-		rc = libevdev_enable_event_code(dev, EV_ABS,
-						abs->value, abs);
+		struct input_absinfo a = *abs;
+
+		/* abs_info->value is used for the code and may be outside
+		   of [min, max] */
+		a.value = abs->minimum;
+		rc = libevdev_enable_event_code(dev, EV_ABS, abs->value, &a);
 		litest_assert_int_eq(rc, 0);
 		abs++;
 	}
@@ -2122,6 +2356,10 @@ litest_create_uinput(const char *name,
 	abs = abs_info;
 	while (abs && abs->value != -1) {
 		if (abs->resolution != 0) {
+			if (libevdev_get_abs_resolution(dev, abs->value) ==
+			    abs->resolution)
+				break;
+
 			rc = libevdev_kernel_set_abs_info(dev,
 							  abs->value,
 							  abs);
@@ -2168,7 +2406,7 @@ litest_create_uinput_device_from_description(const char *name,
 	syspath = libevdev_uinput_get_syspath(uinput);
 
 	/* blocking, we don't want to continue until udev is ready */
-	do {
+	while (1) {
 		udev_device = udev_monitor_receive_device(udev_monitor);
 		litest_assert_notnull(udev_device);
 		udev_action = udev_device_get_action(udev_device);
@@ -2178,7 +2416,11 @@ litest_create_uinput_device_from_description(const char *name,
 		}
 
 		udev_syspath = udev_device_get_syspath(udev_device);
-	} while (!udev_syspath || strcmp(udev_syspath, syspath) != 0);
+		if (udev_syspath && streq(udev_syspath, syspath))
+			break;
+
+		udev_device_unref(udev_device);
+	}
 
 	litest_assert(udev_device_get_property_value(udev_device, "ID_INPUT"));
 
@@ -2436,6 +2678,81 @@ void litest_assert_tablet_proximity_event(struct libinput *li,
 	litest_assert_int_eq(libinput_event_tablet_tool_get_proximity_state(tev),
 			     state);
 	libinput_event_destroy(event);
+}
+
+struct libinput_event_tablet_pad *
+litest_is_pad_button_event(struct libinput_event *event,
+			   unsigned int button,
+			   enum libinput_button_state state)
+{
+	struct libinput_event_tablet_pad *p;
+	enum libinput_event_type type = LIBINPUT_EVENT_TABLET_PAD_BUTTON;
+
+	litest_assert(event != NULL);
+	litest_assert_int_eq(libinput_event_get_type(event), type);
+
+	p = libinput_event_get_tablet_pad_event(event);
+	litest_assert(p != NULL);
+
+	litest_assert_int_eq(libinput_event_tablet_pad_get_button_number(p),
+			     button);
+
+	return p;
+}
+
+struct libinput_event_tablet_pad *
+litest_is_pad_ring_event(struct libinput_event *event,
+			 unsigned int number,
+			 enum libinput_tablet_pad_ring_axis_source source)
+{
+	struct libinput_event_tablet_pad *p;
+	enum libinput_event_type type = LIBINPUT_EVENT_TABLET_PAD_RING;
+
+	litest_assert(event != NULL);
+	litest_assert_int_eq(libinput_event_get_type(event), type);
+	p = libinput_event_get_tablet_pad_event(event);
+
+	litest_assert_int_eq(libinput_event_tablet_pad_get_ring_number(p),
+			     number);
+	litest_assert_int_eq(libinput_event_tablet_pad_get_ring_source(p),
+			     source);
+
+	return p;
+}
+
+struct libinput_event_tablet_pad *
+litest_is_pad_strip_event(struct libinput_event *event,
+			  unsigned int number,
+			  enum libinput_tablet_pad_strip_axis_source source)
+{
+	struct libinput_event_tablet_pad *p;
+	enum libinput_event_type type = LIBINPUT_EVENT_TABLET_PAD_STRIP;
+
+	litest_assert(event != NULL);
+	litest_assert_int_eq(libinput_event_get_type(event), type);
+	p = libinput_event_get_tablet_pad_event(event);
+
+	litest_assert_int_eq(libinput_event_tablet_pad_get_strip_number(p),
+			     number);
+	litest_assert_int_eq(libinput_event_tablet_pad_get_strip_source(p),
+			     source);
+
+	return p;
+}
+
+void
+litest_assert_pad_button_event(struct libinput *li,
+			       unsigned int button,
+			       enum libinput_button_state state)
+{
+	struct libinput_event *event;
+	struct libinput_event_tablet_pad *pev;
+
+	litest_wait_for_event(li);
+	event = libinput_get_event(li);
+
+	pev = litest_is_pad_button_event(event, button, state);
+	libinput_event_destroy(libinput_event_tablet_pad_get_base_event(pev));
 }
 
 void
@@ -2790,7 +3107,7 @@ main(int argc, char **argv)
 
 	list_init(&all_tests);
 
-	setenv("CK_DEFAULT_TIMEOUT", "10", 0);
+	setenv("CK_DEFAULT_TIMEOUT", "30", 0);
 	setenv("LIBINPUT_RUNNING_TEST_SUITE", "1", 1);
 
 	mode = litest_parse_argv(argc, argv);

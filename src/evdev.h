@@ -61,14 +61,16 @@ enum evdev_device_seat_capability {
 	EVDEV_DEVICE_KEYBOARD = (1 << 1),
 	EVDEV_DEVICE_TOUCH = (1 << 2),
 	EVDEV_DEVICE_TABLET = (1 << 3),
+	EVDEV_DEVICE_TABLET_PAD = (1 << 4),
 	EVDEV_DEVICE_GESTURE = (1 << 5),
 };
 
 enum evdev_device_tags {
 	EVDEV_TAG_EXTERNAL_MOUSE = (1 << 0),
 	EVDEV_TAG_INTERNAL_TOUCHPAD = (1 << 1),
-	EVDEV_TAG_TRACKPOINT = (1 << 2),
-	EVDEV_TAG_KEYBOARD = (1 << 3),
+	EVDEV_TAG_EXTERNAL_TOUCHPAD = (1 << 2),
+	EVDEV_TAG_TRACKPOINT = (1 << 3),
+	EVDEV_TAG_KEYBOARD = (1 << 4),
 };
 
 enum evdev_middlebutton_state {
@@ -112,12 +114,16 @@ enum evdev_device_model {
 	EVDEV_MODEL_APPLE_INTERNAL_KEYBOARD = (1 << 13),
 	EVDEV_MODEL_CYBORG_RAT = (1 << 14),
 	EVDEV_MODEL_CYAPA = (1 << 15),
-	EVDEV_MODEL_ALPS_RUSHMORE = (1 << 16),
+	EVDEV_MODEL_LENOVO_T450_TOUCHPAD= (1 << 17),
+	EVDEV_MODEL_DELL_TOUCHPAD = (1 << 18),
+	EVDEV_MODEL_TRACKBALL = (1 << 19),
+	EVDEV_MODEL_APPLE_MAGICMOUSE = (1 << 20),
 };
 
 struct mt_slot {
 	int32_t seat_slot;
 	struct device_coords point;
+	struct device_coords hysteresis_center;
 };
 
 struct evdev_device {
@@ -151,6 +157,8 @@ struct evdev_device {
 		int slot;
 		struct mt_slot *slots;
 		size_t slots_len;
+		bool want_hysteresis;
+		struct device_coords hysteresis_margin;
 	} mt;
 	struct mtdev *mtdev;
 
@@ -171,6 +179,7 @@ struct evdev_device {
 		/* Checks if buttons are down and commits the setting */
 		void (*change_scroll_method)(struct evdev_device *device);
 		bool button_scroll_active;
+		bool button_scroll_btn_pressed;
 		double threshold;
 		double direction_lock_threshold;
 		uint32_t direction;
@@ -282,6 +291,13 @@ struct evdev_dispatch {
 	struct libinput_device_config_calibration calibration;
 
 	struct {
+		bool is_enabled;
+		int angle;
+		struct matrix matrix;
+		struct libinput_device_config_rotation config;
+	} rotation;
+
+	struct {
 		struct libinput_device_config_send_events config;
 		enum libinput_config_send_events_mode current_mode;
 	} sendevents;
@@ -316,9 +332,8 @@ evdev_mt_touchpad_create(struct evdev_device *device);
 struct evdev_dispatch *
 evdev_tablet_create(struct evdev_device *device);
 
-void
-evdev_tag_touchpad(struct evdev_device *device,
-		   struct udev_device *udev_device);
+struct evdev_dispatch *
+evdev_tablet_pad_create(struct evdev_device *device);
 
 void
 evdev_device_led_update(struct evdev_device *device, enum libinput_led leds);
@@ -356,7 +371,7 @@ evdev_device_has_capability(struct evdev_device *device,
 			    enum libinput_device_capability capability);
 
 int
-evdev_device_get_size(struct evdev_device *device,
+evdev_device_get_size(const struct evdev_device *device,
 		      double *w,
 		      double *h);
 
@@ -365,6 +380,31 @@ evdev_device_has_button(struct evdev_device *device, uint32_t code);
 
 int
 evdev_device_has_key(struct evdev_device *device, uint32_t code);
+
+int
+evdev_device_tablet_pad_get_num_buttons(struct evdev_device *device);
+
+int
+evdev_device_tablet_pad_get_num_rings(struct evdev_device *device);
+
+int
+evdev_device_tablet_pad_get_num_strips(struct evdev_device *device);
+
+int
+evdev_device_tablet_pad_get_num_mode_groups(struct evdev_device *device);
+
+struct libinput_tablet_pad_mode_group *
+evdev_device_tablet_pad_get_mode_group(struct evdev_device *device,
+				       unsigned int index);
+
+unsigned int
+evdev_device_tablet_pad_mode_group_get_button_target(
+				     struct libinput_tablet_pad_mode_group *g,
+				     unsigned int button_index);
+
+struct libinput_tablet_pad_led *
+evdev_device_tablet_pad_get_led(struct evdev_device *device,
+				unsigned int led);
 
 double
 evdev_device_transform_x(struct evdev_device *device,
@@ -396,7 +436,7 @@ evdev_keyboard_notify_key(struct evdev_device *device,
 void
 evdev_pointer_notify_button(struct evdev_device *device,
 			    uint64_t time,
-			    int button,
+			    unsigned int button,
 			    enum libinput_button_state state);
 void
 evdev_pointer_notify_physical_button(struct evdev_device *device,
@@ -442,6 +482,15 @@ evdev_init_middlebutton(struct evdev_device *device,
 			bool enabled,
 			bool want_config);
 
+enum libinput_config_middle_emulation_state
+evdev_middlebutton_get(struct libinput_device *device);
+
+int
+evdev_middlebutton_is_available(struct libinput_device *device);
+
+enum libinput_config_middle_emulation_state
+evdev_middlebutton_get_default(struct libinput_device *device);
+
 static inline double
 evdev_convert_to_mm(const struct input_absinfo *absinfo, double v)
 {
@@ -452,6 +501,9 @@ evdev_convert_to_mm(const struct input_absinfo *absinfo, double v)
 int
 evdev_init_left_handed(struct evdev_device *device,
 		       void (*change_to_left_handed)(struct evdev_device *));
+
+bool
+evdev_tablet_has_left_handed(struct evdev_device *device);
 
 static inline uint32_t
 evdev_to_left_handed(struct evdev_device *device,
@@ -464,6 +516,25 @@ evdev_to_left_handed(struct evdev_device *device,
 			return BTN_LEFT;
 	}
 	return button;
+}
+
+static inline int
+evdev_hysteresis(int in, int center, int margin)
+{
+	int diff = in - center;
+	if (abs(diff) <= margin)
+		return center;
+
+	if (diff > margin)
+		return center + diff - margin;
+	else
+		return center + diff + margin;
+}
+
+static inline struct libinput *
+evdev_libinput_context(const struct evdev_device *device)
+{
+	return device->base.seat->libinput;
 }
 
 #endif /* EVDEV_H */
