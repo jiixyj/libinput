@@ -29,6 +29,7 @@
 extern "C" {
 #endif
 
+#include <stdarg.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <libudev.h>
