@@ -12,6 +12,7 @@ libinput_device_group_LDADD = $(LIBUDEV_LIBS)
 
 libinput_model_quirks_SOURCES = libinput-model-quirks.c
 libinput_model_quirks_CFLAGS = \
+			       -I$(top_srcdir)/include \
 			       -I$(top_srcdir)/src \
 			       $(LIBUDEV_CFLAGS) \
 			       $(GCC_CFLAGS)
