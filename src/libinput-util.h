@@ -38,6 +38,9 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#ifdef __FreeBSD__
+#include <xlocale.h>
+#endif
 
 #include "libinput.h"
 
