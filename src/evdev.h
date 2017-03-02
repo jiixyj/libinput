@@ -114,10 +114,16 @@ enum evdev_device_model {
 	EVDEV_MODEL_APPLE_INTERNAL_KEYBOARD = (1 << 13),
 	EVDEV_MODEL_CYBORG_RAT = (1 << 14),
 	EVDEV_MODEL_CYAPA = (1 << 15),
+	EVDEV_MODEL_HP_STREAM11_TOUCHPAD = (1 << 16),
 	EVDEV_MODEL_LENOVO_T450_TOUCHPAD= (1 << 17),
-	EVDEV_MODEL_DELL_TOUCHPAD = (1 << 18),
+	EVDEV_MODEL_TOUCHPAD_VISIBLE_MARKER = (1 << 18),
 	EVDEV_MODEL_TRACKBALL = (1 << 19),
 	EVDEV_MODEL_APPLE_MAGICMOUSE = (1 << 20),
+	EVDEV_MODEL_HP8510_TOUCHPAD = (1 << 21),
+	EVDEV_MODEL_HP6910_TOUCHPAD = (1 << 22),
+	EVDEV_MODEL_HP_ZBOOK_STUDIO_G3 = (1 << 23),
+	EVDEV_MODEL_HP_PAVILION_DM4_TOUCHPAD = (1 << 24),
+	EVDEV_MODEL_APPLE_TOUCHPAD_ONEBUTTON = (1 << 25),
 };
 
 struct mt_slot {
@@ -138,12 +144,19 @@ struct evdev_device {
 	const char *devname;
 	bool was_removed;
 	int fd;
+	enum evdev_device_seat_capability seat_caps;
+	enum evdev_device_tags tags;
+	bool is_mt;
+	bool is_suspended;
+	int dpi; /* HW resolution */
+	struct ratelimit syn_drop_limit; /* ratelimit for SYN_DROPPED logging */
+	struct ratelimit nonpointer_rel_limit; /* ratelimit for REL_* events from non-pointer devices */
+	uint32_t model_flags;
+	struct mtdev *mtdev;
+
 	struct {
 		const struct input_absinfo *absinfo_x, *absinfo_y;
-		int fake_resolution;
-
-		struct device_coords point;
-		int32_t seat_slot;
+		bool is_fake_resolution;
 
 		int apply_calibration;
 		struct matrix calibration;
@@ -151,18 +164,12 @@ struct evdev_device {
 		struct matrix usermatrix; /* as supplied by the caller */
 
 		struct device_coords dimensions;
+
+		struct {
+			struct device_coords min, max;
+			struct ratelimit range_warn_limit;
+		} warning_range;
 	} abs;
-
-	struct {
-		int slot;
-		struct mt_slot *slots;
-		size_t slots_len;
-		bool want_hysteresis;
-		struct device_coords hysteresis_margin;
-	} mt;
-	struct mtdev *mtdev;
-
-	struct device_coords rel;
 
 	struct {
 		struct libinput_timer timer;
@@ -191,24 +198,14 @@ struct evdev_device {
 		bool natural_scrolling_enabled;
 
 		/* angle per REL_WHEEL click in degrees */
-		int wheel_click_angle;
+		struct wheel_angle wheel_click_angle;
 	} scroll;
-
-	enum evdev_event_type pending_event;
-	enum evdev_device_seat_capability seat_caps;
-	enum evdev_device_tags tags;
-
-	int is_mt;
-	int suspended;
 
 	struct {
 		struct libinput_device_config_accel config;
 		struct motion_filter *filter;
 	} pointer;
 
-	/* Bitmask of pressed keys used to ignore initial release events from
-	 * the kernel. */
-	unsigned long hw_key_mask[NLONGS(KEY_CNT)];
 	/* Key counter used for multiplexing button events internally in
 	 * libinput. */
 	uint8_t key_count[KEY_CNT];
@@ -235,12 +232,6 @@ struct evdev_device {
 		uint32_t button_mask;
 		uint64_t first_event_time;
 	} middlebutton;
-
-	int dpi; /* HW resolution */
-	struct ratelimit syn_drop_limit; /* ratelimit for SYN_DROPPED logging */
-	struct ratelimit nonpointer_rel_limit; /* ratelimit for REL_* events from non-pointer devices */
-
-	uint32_t model_flags;
 };
 
 #define EVDEV_UNHANDLED_DEVICE ((struct evdev_device *) 1)
@@ -284,10 +275,24 @@ struct evdev_dispatch_interface {
 	 * was sent */
 	void (*post_added)(struct evdev_device *device,
 			   struct evdev_dispatch *dispatch);
+
+	void (*toggle_touch)(struct evdev_dispatch *dispatch,
+			     struct evdev_device *device,
+			     bool enable);
 };
 
 struct evdev_dispatch {
 	struct evdev_dispatch_interface *interface;
+
+	struct {
+		struct libinput_device_config_send_events config;
+		enum libinput_config_send_events_mode current_mode;
+	} sendevents;
+};
+
+struct fallback_dispatch {
+	struct evdev_dispatch base;
+
 	struct libinput_device_config_calibration calibration;
 
 	struct {
@@ -298,9 +303,34 @@ struct evdev_dispatch {
 	} rotation;
 
 	struct {
-		struct libinput_device_config_send_events config;
-		enum libinput_config_send_events_mode current_mode;
-	} sendevents;
+		struct device_coords point;
+		int32_t seat_slot;
+
+		struct {
+			struct device_coords min, max;
+			struct ratelimit range_warn_limit;
+		} warning_range;
+	} abs;
+
+	struct {
+		int slot;
+		struct mt_slot *slots;
+		size_t slots_len;
+		bool want_hysteresis;
+		struct device_coords hysteresis_margin;
+	} mt;
+
+	struct device_coords rel;
+
+	/* Bitmask of pressed keys used to ignore initial release events from
+	 * the kernel. */
+	unsigned long hw_key_mask[NLONGS(KEY_CNT)];
+
+	enum evdev_event_type pending_event;
+
+	/* true if we're reading events (i.e. not suspended) but we're
+	   ignoring them */
+	bool ignore_events;
 };
 
 struct evdev_device *
@@ -317,9 +347,12 @@ evdev_transform_relative(struct evdev_device *device,
 
 void
 evdev_init_calibration(struct evdev_device *device,
-		       struct evdev_dispatch *dispatch);
+		        struct libinput_device_config_calibration *calibration);
 
-int
+void
+evdev_read_calibration_prop(struct evdev_device *device);
+
+void
 evdev_device_init_pointer_acceleration(struct evdev_device *device,
 				       struct motion_filter *filter);
 
@@ -366,7 +399,7 @@ void
 evdev_device_calibrate(struct evdev_device *device,
 		       const float calibration[6]);
 
-int
+bool
 evdev_device_has_capability(struct evdev_device *device,
 			    enum libinput_device_capability capability);
 
@@ -415,7 +448,7 @@ double
 evdev_device_transform_y(struct evdev_device *device,
 			 double y,
 			 uint32_t height);
-int
+void
 evdev_device_suspend(struct evdev_device *device);
 
 int
@@ -426,12 +459,6 @@ evdev_notify_suspended_device(struct evdev_device *device);
 
 void
 evdev_notify_resumed_device(struct evdev_device *device);
-
-void
-evdev_keyboard_notify_key(struct evdev_device *device,
-			  uint64_t time,
-			  int key,
-			  enum libinput_key_state state);
 
 void
 evdev_pointer_notify_button(struct evdev_device *device,
@@ -498,7 +525,7 @@ evdev_convert_to_mm(const struct input_absinfo *absinfo, double v)
 	return value/absinfo->resolution;
 }
 
-int
+void
 evdev_init_left_handed(struct evdev_device *device,
 		       void (*change_to_left_handed)(struct evdev_device *));
 
@@ -518,6 +545,38 @@ evdev_to_left_handed(struct evdev_device *device,
 	return button;
 }
 
+/**
+ * Apply a hysteresis filtering to the coordinate in, based on the current
+ * hysteresis center and the margin. If 'in' is within 'margin' of center,
+ * return the center (and thus filter the motion). If 'in' is outside,
+ * return a point on the edge of the new margin. So for a point x in the
+ * space outside c + margin we return r:
+ * +---+       +---+
+ * | c |  x →  | r x
+ * +---+       +---+
+ *
+ * The effect of this is that initial small motions are filtered. Once we
+ * move into one direction we lag the real coordinates by 'margin' but any
+ * movement that continues into that direction will always be just outside
+ * margin - we get responsive movement. Once we move back into the other
+ * direction, the first movements are filtered again.
+ *
+ * Returning the edge rather than the point avoids cursor jumps, as the
+ * first reachable coordinate is the point next to the center (center + 1).
+ * Otherwise, the center has a dead zone of size margin around it and the
+ * first reachable point is the margin edge.
+ *
+ * Hysteresis is handled separately per axis (and the window is thus
+ * rectangular, not circular). It is unkown if that's an issue, but the
+ * calculation to do circular hysteresis are nontrivial, especially since
+ * many touchpads have uneven x/y resolutions.
+ *
+ * @param in The input coordinate
+ * @param center Current center of the hysteresis
+ * @param margin Hysteresis width (on each side)
+ *
+ * @return The new center of the hysteresis
+ */
 static inline int
 evdev_hysteresis(int in, int center, int margin)
 {
@@ -525,16 +584,153 @@ evdev_hysteresis(int in, int center, int margin)
 	if (abs(diff) <= margin)
 		return center;
 
-	if (diff > margin)
-		return center + diff - margin;
+	if (diff > 0)
+		return in - margin;
 	else
-		return center + diff + margin;
+		return in + margin;
 }
 
 static inline struct libinput *
 evdev_libinput_context(const struct evdev_device *device)
 {
 	return device->base.seat->libinput;
+}
+
+/**
+ * Convert the pair of delta coordinates in device space to mm.
+ */
+static inline struct phys_coords
+evdev_device_unit_delta_to_mm(const struct evdev_device* device,
+			      const struct device_coords *units)
+{
+	struct phys_coords mm = { 0,  0 };
+	const struct input_absinfo *absx, *absy;
+
+	if (device->abs.absinfo_x == NULL ||
+	    device->abs.absinfo_y == NULL) {
+		log_bug_libinput(evdev_libinput_context(device),
+				 "%s: is not an abs device\n",
+				 device->devname);
+		return mm;
+	}
+
+	absx = device->abs.absinfo_x;
+	absy = device->abs.absinfo_y;
+
+	mm.x = 1.0 * units->x/absx->resolution;
+	mm.y = 1.0 * units->y/absy->resolution;
+
+	return mm;
+}
+
+/**
+ * Convert the pair of coordinates in device space to mm. This takes the
+ * axis min into account, i.e. a unit of min is equivalent to 0 mm.
+ */
+static inline struct phys_coords
+evdev_device_units_to_mm(const struct evdev_device* device,
+			 const struct device_coords *units)
+{
+	struct phys_coords mm = { 0,  0 };
+	const struct input_absinfo *absx, *absy;
+
+	if (device->abs.absinfo_x == NULL ||
+	    device->abs.absinfo_y == NULL) {
+		log_bug_libinput(evdev_libinput_context(device),
+				 "%s: is not an abs device\n",
+				 device->devname);
+		return mm;
+	}
+
+	absx = device->abs.absinfo_x;
+	absy = device->abs.absinfo_y;
+
+	mm.x = (units->x - absx->minimum)/absx->resolution;
+	mm.y = (units->y - absy->minimum)/absy->resolution;
+
+	return mm;
+}
+
+/**
+ * Convert the pair of coordinates in mm to device units. This takes the
+ * axis min into account, i.e. 0 mm  is equivalent to the min.
+ */
+static inline struct device_coords
+evdev_device_mm_to_units(const struct evdev_device *device,
+			 const struct phys_coords *mm)
+{
+	struct device_coords units = { 0,  0 };
+	const struct input_absinfo *absx, *absy;
+
+	if (device->abs.absinfo_x == NULL ||
+	    device->abs.absinfo_y == NULL) {
+		log_bug_libinput(evdev_libinput_context(device),
+				 "%s: is not an abs device\n",
+				 device->devname);
+		return units;
+	}
+
+	absx = device->abs.absinfo_x;
+	absy = device->abs.absinfo_y;
+
+	units.x = mm->x * absx->resolution + absx->minimum;
+	units.y = mm->y * absy->resolution + absy->minimum;
+
+	return units;
+}
+
+static inline void
+evdev_device_init_abs_range_warnings(struct evdev_device *device)
+{
+	const struct input_absinfo *x, *y;
+	int width, height;
+
+	x = device->abs.absinfo_x;
+	y = device->abs.absinfo_y;
+	width = device->abs.dimensions.x;
+	height = device->abs.dimensions.y;
+
+	device->abs.warning_range.min.x = x->minimum - 0.05 * width;
+	device->abs.warning_range.min.y = y->minimum - 0.05 * height;
+	device->abs.warning_range.max.x = x->maximum + 0.05 * width;
+	device->abs.warning_range.max.y = y->maximum + 0.05 * height;
+
+	/* One warning every 5 min is enough */
+	ratelimit_init(&device->abs.warning_range.range_warn_limit,
+		       s2us(3000),
+		       1);
+}
+
+static inline void
+evdev_device_check_abs_axis_range(struct evdev_device *device,
+				  unsigned int code,
+				  int value)
+{
+	int min, max;
+
+	switch(code) {
+	case ABS_X:
+	case ABS_MT_POSITION_X:
+		min = device->abs.warning_range.min.x;
+		max = device->abs.warning_range.max.x;
+		break;
+	case ABS_Y:
+	case ABS_MT_POSITION_Y:
+		min = device->abs.warning_range.min.y;
+		max = device->abs.warning_range.max.y;
+		break;
+	default:
+		return;
+	}
+
+	if (value < min || value > max) {
+		log_info_ratelimit(evdev_libinput_context(device),
+				   &device->abs.warning_range.range_warn_limit,
+				   "Axis %#x value %d is outside expected range [%d, %d]\n"
+				   "See %s/absolute_coordinate_ranges.html for details\n",
+				   code, value, min, max,
+				   HTTP_DOC_LINK);
+	}
 }
 
 #endif /* EVDEV_H */

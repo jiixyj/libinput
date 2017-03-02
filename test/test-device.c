@@ -61,6 +61,22 @@ START_TEST(device_sendevents_config_invalid)
 }
 END_TEST
 
+static inline bool
+touchpad_is_external(struct litest_device *dev)
+{
+	struct udev_device *udev_device;
+	const char *prop;
+	bool is_external;
+
+	udev_device = libinput_device_get_udev_device(dev->libinput_device);
+	prop = udev_device_get_property_value(udev_device,
+					      "ID_INPUT_TOUCHPAD_INTEGRATION");
+	is_external = prop && streq(prop, "external");
+	udev_device_unref(udev_device);
+
+	return is_external;
+}
+
 START_TEST(device_sendevents_config_touchpad)
 {
 	struct litest_device *dev = litest_current_device();
@@ -71,7 +87,7 @@ START_TEST(device_sendevents_config_touchpad)
 
 	/* The wacom devices in the test suite are external */
 	if (libevdev_get_id_vendor(dev->evdev) != VENDOR_ID_WACOM &&
-	    libevdev_get_id_bustype(dev->evdev) != BUS_BLUETOOTH)
+	    !touchpad_is_external(dev))
 		expected |=
 			LIBINPUT_CONFIG_SEND_EVENTS_DISABLED_ON_EXTERNAL_MOUSE;
 
@@ -91,7 +107,7 @@ START_TEST(device_sendevents_config_touchpad_superset)
 
 	/* The wacom devices in the test suite are external */
 	if (libevdev_get_id_vendor(dev->evdev) == VENDOR_ID_WACOM ||
-	    libevdev_get_id_bustype(dev->evdev) == BUS_BLUETOOTH)
+	    touchpad_is_external(dev))
 		return;
 
 	device = dev->libinput_device;
@@ -211,6 +227,85 @@ START_TEST(device_disable_touchpad)
 }
 END_TEST
 
+START_TEST(device_disable_touch)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+	struct libinput_device *device;
+	enum libinput_config_status status;
+
+	device = dev->libinput_device;
+
+	litest_drain_events(li);
+
+	status = libinput_device_config_send_events_set_mode(device,
+			LIBINPUT_CONFIG_SEND_EVENTS_DISABLED);
+	ck_assert_int_eq(status, LIBINPUT_CONFIG_STATUS_SUCCESS);
+
+	/* no event from disabling */
+	litest_assert_empty_queue(li);
+
+	litest_touch_down(dev, 0, 50, 50);
+	litest_touch_move_to(dev, 0, 50, 50, 90, 90, 10, 0);
+	litest_touch_up(dev, 0);
+
+	litest_assert_empty_queue(li);
+
+	/* no event from resuming */
+	status = libinput_device_config_send_events_set_mode(device,
+			LIBINPUT_CONFIG_SEND_EVENTS_ENABLED);
+	ck_assert_int_eq(status, LIBINPUT_CONFIG_STATUS_SUCCESS);
+	litest_assert_empty_queue(li);
+}
+END_TEST
+
+START_TEST(device_disable_touch_during_touch)
+{
+	struct litest_device *dev = litest_current_device();
+	struct libinput *li = dev->libinput;
+	struct libinput_device *device;
+	enum libinput_config_status status;
+	struct libinput_event *event;
+
+	device = dev->libinput_device;
+
+	litest_touch_down(dev, 0, 50, 50);
+	litest_touch_move_to(dev, 0, 50, 50, 90, 90, 10, 0);
+	litest_drain_events(li);
+
+	status = libinput_device_config_send_events_set_mode(device,
+			LIBINPUT_CONFIG_SEND_EVENTS_DISABLED);
+	ck_assert_int_eq(status, LIBINPUT_CONFIG_STATUS_SUCCESS);
+
+	/* after disabling sendevents we require a touch up */
+	libinput_dispatch(li);
+	event = libinput_get_event(li);
+	litest_is_touch_event(event, LIBINPUT_EVENT_TOUCH_UP);
+	libinput_event_destroy(event);
+
+	event = libinput_get_event(li);
+	litest_is_touch_event(event, LIBINPUT_EVENT_TOUCH_FRAME);
+	libinput_event_destroy(event);
+
+	litest_assert_empty_queue(li);
+
+	litest_touch_move_to(dev, 0, 90, 90, 50, 50, 10, 0);
+	litest_touch_up(dev, 0);
+
+	litest_touch_down(dev, 0, 50, 50);
+	litest_touch_move_to(dev, 0, 50, 50, 90, 90, 10, 0);
+	litest_touch_up(dev, 0);
+
+	litest_assert_empty_queue(li);
+
+	/* no event from resuming */
+	status = libinput_device_config_send_events_set_mode(device,
+			LIBINPUT_CONFIG_SEND_EVENTS_ENABLED);
+	ck_assert_int_eq(status, LIBINPUT_CONFIG_STATUS_SUCCESS);
+	litest_assert_empty_queue(li);
+}
+END_TEST
+
 START_TEST(device_disable_events_pending)
 {
 	struct litest_device *dev = litest_current_device();
@@ -296,7 +391,7 @@ START_TEST(device_reenable_syspath_changed)
 {
 	struct libinput *li;
 	struct litest_device *litest_device;
-	struct libinput_device *device1, *device2;
+	struct libinput_device *device1;
 	enum libinput_config_status status;
 	struct libinput_event *event;
 
@@ -315,12 +410,6 @@ START_TEST(device_reenable_syspath_changed)
 	litest_drain_events(li);
 
 	litest_device = litest_add_device(li, LITEST_MOUSE);
-	device2 = litest_device->libinput_device;
-	/* Note: if the sysname isn't the same, some other device got added
-	 * or removed while this test was running.  This is unlikely and
-	 * would result in a false positive, so let's fail the test here */
-	ck_assert_str_eq(libinput_device_get_sysname(device1),
-			 libinput_device_get_sysname(device2));
 
 	status = libinput_device_config_send_events_set_mode(device1,
 			LIBINPUT_CONFIG_SEND_EVENTS_ENABLED);
@@ -985,6 +1074,39 @@ START_TEST(abs_mt_device_missing_res)
 }
 END_TEST
 
+START_TEST(ignore_joystick)
+{
+	struct libinput *li;
+	struct libevdev_uinput *uinput;
+	struct libinput_device *device;
+	struct input_absinfo absinfo[] = {
+		{ ABS_X, 0, 10, 0, 0, 10 },
+		{ ABS_Y, 0, 10, 0, 0, 10 },
+		{ ABS_RX, 0, 10, 0, 0, 10 },
+		{ ABS_RY, 0, 10, 0, 0, 10 },
+		{ ABS_THROTTLE, 0, 2, 0, 0, 0 },
+		{ ABS_RUDDER, 0, 255, 0, 0, 0 },
+		{ -1, -1, -1, -1, -1, -1 }
+	};
+
+	li = litest_create_context();
+	litest_disable_log_handler(li);
+	litest_drain_events(li);
+
+	uinput = litest_create_uinput_abs_device("joystick test device", NULL,
+						 absinfo,
+						 EV_KEY, BTN_TRIGGER,
+						 EV_KEY, BTN_A,
+						 -1);
+	device = libinput_path_add_device(li,
+					  libevdev_uinput_get_devnode(uinput));
+	litest_assert_ptr_null(device);
+	libevdev_uinput_destroy(uinput);
+	litest_restore_log_handler(li);
+	libinput_unref(li);
+}
+END_TEST
+
 START_TEST(device_wheel_only)
 {
 	struct litest_device *dev = litest_current_device();
@@ -1347,7 +1469,7 @@ START_TEST(device_quirks_apple_magicmouse)
 END_TEST
 
 void
-litest_setup_tests(void)
+litest_setup_tests_device(void)
 {
 	struct range abs_range = { 0, ABS_MISC };
 	struct range abs_mt_range = { ABS_MT_SLOT + 1, ABS_CNT };
@@ -1359,6 +1481,10 @@ litest_setup_tests(void)
 	litest_add("device:sendevents", device_sendevents_config_default, LITEST_ANY, LITEST_TABLET);
 	litest_add("device:sendevents", device_disable, LITEST_RELATIVE, LITEST_TABLET);
 	litest_add("device:sendevents", device_disable_touchpad, LITEST_TOUCHPAD, LITEST_TABLET);
+	litest_add("device:sendevents", device_disable_touch, LITEST_TOUCH, LITEST_ANY);
+	litest_add("device:sendevents", device_disable_touch_during_touch, LITEST_TOUCH, LITEST_ANY);
+	litest_add("device:sendevents", device_disable_touch, LITEST_SINGLE_TOUCH, LITEST_TOUCHPAD);
+	litest_add("device:sendevents", device_disable_touch_during_touch, LITEST_SINGLE_TOUCH, LITEST_TOUCHPAD);
 	litest_add("device:sendevents", device_disable_events_pending, LITEST_RELATIVE, LITEST_TOUCHPAD|LITEST_TABLET);
 	litest_add("device:sendevents", device_double_disable, LITEST_ANY, LITEST_TABLET);
 	litest_add("device:sendevents", device_double_enable, LITEST_ANY, LITEST_TABLET);
@@ -1371,7 +1497,7 @@ litest_setup_tests(void)
 	litest_add("device:sendevents", device_disable_release_softbutton, LITEST_CLICKPAD, LITEST_APPLE_CLICKPAD);
 	litest_add("device:sendevents", device_disable_topsoftbutton, LITEST_TOPBUTTONPAD, LITEST_ANY);
 	litest_add("device:id", device_ids, LITEST_ANY, LITEST_ANY);
-	litest_add_for_device("device:context", device_context, LITEST_SYNAPTICS_CLICKPAD);
+	litest_add_for_device("device:context", device_context, LITEST_SYNAPTICS_CLICKPAD_X220);
 
 	litest_add("device:udev", device_get_udev_handle, LITEST_ANY, LITEST_ANY);
 
@@ -1387,6 +1513,7 @@ litest_setup_tests(void)
 	litest_add_ranged_no_device("device:invalid devices", abs_mt_device_no_range, &abs_mt_range);
 	litest_add_no_device("device:invalid devices", abs_device_missing_res);
 	litest_add_no_device("device:invalid devices", abs_mt_device_missing_res);
+	litest_add_no_device("device:invalid devices", ignore_joystick);
 
 	litest_add("device:wheel", device_wheel_only, LITEST_WHEEL, LITEST_RELATIVE|LITEST_ABSOLUTE|LITEST_TABLET);
 	litest_add_no_device("device:accelerometer", device_accelerometer);

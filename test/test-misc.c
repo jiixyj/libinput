@@ -43,7 +43,7 @@ static void close_restricted(int fd, void *data)
 	close(fd);
 }
 
-const struct libinput_interface simple_interface = {
+static const struct libinput_interface simple_interface = {
 	.open_restricted = open_restricted,
 	.close_restricted = close_restricted,
 };
@@ -728,8 +728,6 @@ START_TEST(wheel_click_parser)
 		{ "10", 10 },
 		{ "-12", -12 },
 		{ "360", 360 },
-		{ "66 ", 66 },
-		{ "   100 ", 100 },
 
 		{ "0", 0 },
 		{ "-0", 0 },
@@ -745,6 +743,33 @@ START_TEST(wheel_click_parser)
 
 	for (i = 0; tests[i].tag != NULL; i++) {
 		angle = parse_mouse_wheel_click_angle_property(tests[i].tag);
+		ck_assert_int_eq(angle, tests[i].expected_value);
+	}
+}
+END_TEST
+
+START_TEST(wheel_click_count_parser)
+{
+	struct parser_test tests[] = {
+		{ "1", 1 },
+		{ "10", 10 },
+		{ "-12", -12 },
+		{ "360", 360 },
+
+		{ "0", 0 },
+		{ "-0", 0 },
+		{ "a", 0 },
+		{ "10a", 0 },
+		{ "10-", 0 },
+		{ "sadfasfd", 0 },
+		{ "361", 0 },
+		{ NULL, 0 }
+	};
+
+	int i, angle;
+
+	for (i = 0; tests[i].tag != NULL; i++) {
+		angle = parse_mouse_wheel_click_count_property(tests[i].tag);
 		ck_assert_int_eq(angle, tests[i].expected_value);
 	}
 }
@@ -832,6 +857,140 @@ START_TEST(time_conversion)
 }
 END_TEST
 
+struct atoi_test {
+	char *str;
+	bool success;
+	int val;
+};
+
+START_TEST(safe_atoi_test)
+{
+	struct atoi_test tests[] = {
+		{ "10", true, 10 },
+		{ "20", true, 20 },
+		{ "-1", true, -1 },
+		{ "2147483647", true, 2147483647 },
+		{ "-2147483648", true, -2147483648 },
+		{ "4294967295", false, 0 },
+		{ "0x0", false, 0 },
+		{ "-10x10", false, 0 },
+		{ "1x-99", false, 0 },
+		{ "", false, 0 },
+		{ "abd", false, 0 },
+		{ "xabd", false, 0 },
+		{ "0xaf", false, 0 },
+		{ "0x0x", false, 0 },
+		{ "x10", false, 0 },
+		{ NULL, false, 0 }
+	};
+	int v;
+	bool success;
+
+	for (int i = 0; tests[i].str != NULL; i++) {
+		v = 0xad;
+		success = safe_atoi(tests[i].str, &v);
+		ck_assert(success == tests[i].success);
+		if (success)
+			ck_assert_int_eq(v, tests[i].val);
+		else
+			ck_assert_int_eq(v, 0xad);
+	}
+}
+END_TEST
+
+struct atod_test {
+	char *str;
+	bool success;
+	double val;
+};
+
+START_TEST(safe_atod_test)
+{
+	struct atod_test tests[] = {
+		{ "10", true, 10 },
+		{ "20", true, 20 },
+		{ "-1", true, -1 },
+		{ "2147483647", true, 2147483647 },
+		{ "-2147483648", true, -2147483648 },
+		{ "4294967295", true, 4294967295 },
+		{ "0x0", true, 0 },
+		{ "0x10", true, 0x10 },
+		{ "0xaf", true, 0xaf },
+		{ "x80", false, 0 },
+		{ "0.0", true, 0.0 },
+		{ "0.1", true, 0.1 },
+		{ "1.2", true, 1.2 },
+		{ "-324.9", true, -324.9 },
+		{ "9324.9", true, 9324.9 },
+		{ "NAN", false, 0 },
+		{ "INFINITY", false, 0 },
+		{ "-10x10", false, 0 },
+		{ "1x-99", false, 0 },
+		{ "", false, 0 },
+		{ "abd", false, 0 },
+		{ "xabd", false, 0 },
+		{ "0x0x", false, 0 },
+		{ NULL, false, 0 }
+	};
+	double v;
+	bool success;
+
+	for (int i = 0; tests[i].str != NULL; i++) {
+		v = 0xad;
+		success = safe_atod(tests[i].str, &v);
+		ck_assert(success == tests[i].success);
+		if (success)
+			ck_assert_int_eq(v, tests[i].val);
+		else
+			ck_assert_int_eq(v, 0xad);
+	}
+}
+END_TEST
+
+struct strsplit_test {
+	const char *string;
+	const char *delim;
+	const char *results[10];
+};
+
+START_TEST(strsplit_test)
+{
+	struct strsplit_test tests[] = {
+		{ "one two three", " ", { "one", "two", "three", NULL } },
+		{ "one", " ", { "one", NULL } },
+		{ "one two ", " ", { "one", "two", NULL } },
+		{ "one  two", " ", { "one", "two", NULL } },
+		{ " one two", " ", { "one", "two", NULL } },
+		{ "one", "\t \r", { "one", NULL } },
+		{ "one two three", " t", { "one", "wo", "hree", NULL } },
+		{ " one two three", "te", { " on", " ", "wo ", "hr", NULL } },
+		{ "one", "ne", { "o", NULL } },
+		{ "onene", "ne", { "o", NULL } },
+		{ NULL, NULL, { NULL }}
+	};
+	struct strsplit_test *t = tests;
+
+	while (t->string) {
+		char **strv;
+		int idx = 0;
+		strv = strv_from_string(t->string, t->delim);
+		while (t->results[idx]) {
+			ck_assert_str_eq(t->results[idx], strv[idx]);
+			idx++;
+		}
+		ck_assert_ptr_eq(strv[idx], NULL);
+		strv_free(strv);
+		t++;
+	}
+
+	/* Special cases */
+	ck_assert_ptr_eq(strv_from_string("", " "), NULL);
+	ck_assert_ptr_eq(strv_from_string(" ", " "), NULL);
+	ck_assert_ptr_eq(strv_from_string("     ", " "), NULL);
+	ck_assert_ptr_eq(strv_from_string("oneoneone", "one"), NULL);
+}
+END_TEST
+
 static int open_restricted_leak(const char *path, int flags, void *data)
 {
 	return *(int*)data;
@@ -847,6 +1006,7 @@ const struct libinput_interface leak_interface = {
 	.close_restricted = close_restricted_leak,
 };
 
+LIBINPUT_ATTRIBUTE_PRINTF(3, 0)
 static void
 simple_log_handler(struct libinput *libinput,
 		   enum libinput_log_priority priority,
@@ -935,7 +1095,7 @@ START_TEST(library_version)
 END_TEST
 
 void
-litest_setup_tests(void)
+litest_setup_tests_misc(void)
 {
 	litest_add_no_device("events:conversion", event_conversion_device_notify);
 	litest_add_for_device("events:conversion", event_conversion_pointer, LITEST_MOUSE);
@@ -946,7 +1106,7 @@ litest_setup_tests(void)
 	litest_add_for_device("events:conversion", event_conversion_gesture, LITEST_BCM5974);
 	litest_add_for_device("events:conversion", event_conversion_tablet, LITEST_WACOM_CINTIQ);
 	litest_add_for_device("events:conversion", event_conversion_tablet_pad, LITEST_WACOM_INTUOS5_PAD);
-	litest_add_no_device("bitfield_helpers", bitfield_helpers);
+	litest_add_no_device("misc:bitfield_helpers", bitfield_helpers);
 
 	litest_add_no_device("context:refcount", context_ref_counting);
 	litest_add_no_device("config:status string", config_status_string);
@@ -955,8 +1115,12 @@ litest_setup_tests(void)
 	litest_add_no_device("misc:ratelimit", ratelimit_helpers);
 	litest_add_no_device("misc:parser", dpi_parser);
 	litest_add_no_device("misc:parser", wheel_click_parser);
+	litest_add_no_device("misc:parser", wheel_click_count_parser);
 	litest_add_no_device("misc:parser", trackpoint_accel_parser);
 	litest_add_no_device("misc:parser", dimension_prop_parser);
+	litest_add_no_device("misc:parser", safe_atoi_test);
+	litest_add_no_device("misc:parser", safe_atod_test);
+	litest_add_no_device("misc:parser", strsplit_test);
 	litest_add_no_device("misc:time", time_conversion);
 
 	litest_add_no_device("misc:fd", fd_no_event_leak);

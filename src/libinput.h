@@ -308,7 +308,7 @@ enum libinput_tablet_pad_strip_axis_source {
  * while a button is held down.
  *
  * @note The @ref libinput_tablet_tool_type can only describe the default physical
- * type of the device. For devices with adjustible physical properties
+ * type of the device. For devices with adjustable physical properties
  * the tool type remains the same, i.e. putting a Wacom stroke nib into a
  * classic pen leaves the tool type as @ref LIBINPUT_TABLET_TOOL_TYPE_PEN.
  */
@@ -330,7 +330,7 @@ enum libinput_tablet_tool_type {
  * LIBINPUT_DEVICE_CAP_TABLET_TOOL capability.
  *
  * The proximity of a tool is a binary state signalling whether the tool is
- * within detectable distance of the tablet device. A tool that is out of
+ * within a detectable distance of the tablet device. A tool that is out of
  * proximity cannot generate events.
  *
  * On some hardware a tool goes out of proximity when it ceases to touch the
@@ -2005,7 +2005,7 @@ libinput_event_tablet_tool_get_distance(struct libinput_event_tablet_tool *event
  * If this axis does not exist on the current tool, this function returns 0.
  *
  * @param event The libinput tablet tool event
- * @return The current value of the the axis in degrees
+ * @return The current value of the axis in degrees
  */
 double
 libinput_event_tablet_tool_get_tilt_x(struct libinput_event_tablet_tool *event);
@@ -3396,7 +3396,7 @@ libinput_device_get_seat(struct libinput_device *device);
  * device and adding it to the new seat.
  *
  * This command is identical to physically unplugging the device, then
- * re-plugging it as member of the new seat. libinput will generate a
+ * re-plugging it as a member of the new seat. libinput will generate a
  * @ref LIBINPUT_EVENT_DEVICE_REMOVED event and this @ref libinput_device is
  * considered removed from the context; it will not generate further events
  * and will be freed when the refcount reaches zero.
@@ -3771,6 +3771,88 @@ libinput_device_config_tap_get_enabled(struct libinput_device *device);
  */
 enum libinput_config_tap_state
 libinput_device_config_tap_get_default_enabled(struct libinput_device *device);
+
+/**
+ * @ingroup config
+ */
+enum libinput_config_tap_button_map {
+	/** 1/2/3 finger tap maps to left/right/middle */
+	LIBINPUT_CONFIG_TAP_MAP_LRM,
+	/** 1/2/3 finger tap maps to left/middle/right*/
+	LIBINPUT_CONFIG_TAP_MAP_LMR,
+};
+
+/**
+ * @ingroup config
+ *
+ * Set the finger number to button number mapping for tap-to-click. The
+ * default mapping on most devices is to have a 1, 2 and 3 finger tap to map
+ * to the left, right and middle button, respectively.
+ * A device may permit changing the button mapping but disallow specific
+ * maps. In this case @ref LIBINPUT_CONFIG_STATUS_UNSUPPORTED is returned,
+ * the caller is expected to handle this case correctly.
+ *
+ * Changing the button mapping may not take effect immediately,
+ * the device may wait until it is in a neutral state before applying any
+ * changes.
+ *
+ * The mapping may be changed when tap-to-click is disabled. The new mapping
+ * takes effect when tap-to-click is enabled in the future.
+ *
+ * @note It is an application bug to call this function for devices where
+ * libinput_device_config_tap_get_finger_count() returns 0.
+ *
+ * @param device The device to configure
+ * @param map The new finger-to-button number mapping
+ * @return A config status code. Changing the order on a device that does not
+ * support tapping always fails with @ref LIBINPUT_CONFIG_STATUS_UNSUPPORTED.
+ *
+ * @see libinput_device_config_tap_get_button_map
+ * @see libinput_device_config_tap_get_default_button_map
+ */
+enum libinput_config_status
+libinput_device_config_tap_set_button_map(struct libinput_device *device,
+					    enum libinput_config_tap_button_map map);
+
+/**
+ * @ingroup config
+ *
+ * Get the finger number to button number mapping for tap-to-click.
+ *
+ * The return value for a device that does not support tapping is always
+ * @ref LIBINPUT_CONFIG_TAP_MAP_LRM.
+ *
+ * @note It is an application bug to call this function for devices where
+ * libinput_device_config_tap_get_finger_count() returns 0.
+ *
+ * @param device The device to configure
+ * @return The current finger-to-button number mapping
+ *
+ * @see libinput_device_config_tap_set_button_map
+ * @see libinput_device_config_tap_get_default_button_map
+ */
+enum libinput_config_tap_button_map
+libinput_device_config_tap_get_button_map(struct libinput_device *device);
+
+/**
+ * @ingroup config
+ *
+ * Get the default finger number to button number mapping for tap-to-click.
+ *
+ * The return value for a device that does not support tapping is always
+ * @ref LIBINPUT_CONFIG_TAP_MAP_LRM.
+ *
+ * @note It is an application bug to call this function for devices where
+ * libinput_device_config_tap_get_finger_count() returns 0.
+ *
+ * @param device The device to configure
+ * @return The current finger-to-button number mapping
+ *
+ * @see libinput_device_config_tap_set_button_map
+ * @see libinput_device_config_tap_get_default_button_map
+ */
+enum libinput_config_tap_button_map
+libinput_device_config_tap_get_default_button_map(struct libinput_device *device);
 
 /**
  * @ingroup config
@@ -4165,6 +4247,10 @@ libinput_device_config_send_events_get_default_mode(struct libinput_device *devi
  * @param device The device to configure
  *
  * @return 0 if the device is not accelerated, nonzero if it is accelerated
+ *
+ * @see libinput_device_config_accel_set_speed
+ * @see libinput_device_config_accel_get_speed
+ * @see libinput_device_config_accel_get_default_speed
  */
 int
 libinput_device_config_accel_is_available(struct libinput_device *device);
@@ -4184,6 +4270,10 @@ libinput_device_config_accel_is_available(struct libinput_device *device);
  * @param speed The normalized speed, in a range of [-1, 1]
  *
  * @return A config status code
+ *
+ * @see libinput_device_config_accel_is_available
+ * @see libinput_device_config_accel_get_speed
+ * @see libinput_device_config_accel_get_default_speed
  */
 enum libinput_config_status
 libinput_device_config_accel_set_speed(struct libinput_device *device,
@@ -4199,6 +4289,10 @@ libinput_device_config_accel_set_speed(struct libinput_device *device,
  * @param device The device to configure
  *
  * @return The current speed, range -1 to 1
+ *
+ * @see libinput_device_config_accel_is_available
+ * @see libinput_device_config_accel_set_speed
+ * @see libinput_device_config_accel_get_default_speed
  */
 double
 libinput_device_config_accel_get_speed(struct libinput_device *device);
@@ -4212,6 +4306,10 @@ libinput_device_config_accel_get_speed(struct libinput_device *device);
  *
  * @param device The device to configure
  * @return The default speed setting for this device.
+ *
+ * @see libinput_device_config_accel_is_available
+ * @see libinput_device_config_accel_set_speed
+ * @see libinput_device_config_accel_get_speed
  */
 double
 libinput_device_config_accel_get_default_speed(struct libinput_device *device);
@@ -4318,9 +4416,9 @@ libinput_device_config_accel_get_default_profile(struct libinput_device *device)
  * @return Zero if natural scrolling is not supported, non-zero if natural
  * scrolling is supported by this device
  *
- * @see libinput_device_config_set_natural_scroll_enabled
- * @see libinput_device_config_get_natural_scroll_enabled
- * @see libinput_device_config_get_default_natural_scroll_enabled
+ * @see libinput_device_config_scroll_set_natural_scroll_enabled
+ * @see libinput_device_config_scroll_get_natural_scroll_enabled
+ * @see libinput_device_config_scroll_get_default_natural_scroll_enabled
  */
 int
 libinput_device_config_scroll_has_natural_scroll(struct libinput_device *device);
@@ -4335,9 +4433,9 @@ libinput_device_config_scroll_has_natural_scroll(struct libinput_device *device)
  *
  * @return A config status code
  *
- * @see libinput_device_config_has_natural_scroll
- * @see libinput_device_config_get_natural_scroll_enabled
- * @see libinput_device_config_get_default_natural_scroll_enabled
+ * @see libinput_device_config_scroll_has_natural_scroll
+ * @see libinput_device_config_scroll_get_natural_scroll_enabled
+ * @see libinput_device_config_scroll_get_default_natural_scroll_enabled
  */
 enum libinput_config_status
 libinput_device_config_scroll_set_natural_scroll_enabled(struct libinput_device *device,
@@ -4351,9 +4449,9 @@ libinput_device_config_scroll_set_natural_scroll_enabled(struct libinput_device 
  *
  * @return Zero if natural scrolling is disabled, non-zero if enabled
  *
- * @see libinput_device_config_has_natural_scroll
- * @see libinput_device_config_set_natural_scroll_enabled
- * @see libinput_device_config_get_default_natural_scroll_enabled
+ * @see libinput_device_config_scroll_has_natural_scroll
+ * @see libinput_device_config_scroll_set_natural_scroll_enabled
+ * @see libinput_device_config_scroll_get_default_natural_scroll_enabled
  */
 int
 libinput_device_config_scroll_get_natural_scroll_enabled(struct libinput_device *device);
@@ -4367,9 +4465,9 @@ libinput_device_config_scroll_get_natural_scroll_enabled(struct libinput_device 
  *
  * @return Zero if natural scrolling is disabled by default, non-zero if enabled
  *
- * @see libinput_device_config_has_natural_scroll
- * @see libinput_device_config_set_natural_scroll_enabled
- * @see libinput_device_config_get_natural_scroll_enabled
+ * @see libinput_device_config_scroll_has_natural_scroll
+ * @see libinput_device_config_scroll_set_natural_scroll_enabled
+ * @see libinput_device_config_scroll_get_natural_scroll_enabled
  */
 int
 libinput_device_config_scroll_get_default_natural_scroll_enabled(struct libinput_device *device);
@@ -4570,8 +4668,7 @@ enum libinput_config_middle_emulation_state {
  * @ingroup config
  *
  * Check if middle mouse button emulation configuration is available on this
- * device. See libinput_device_config_middle_emulation_set_enabled() for
- * details.
+ * device. See @ref middle_button_emulation for details.
  *
  * @note Some devices provide middle mouse button emulation but do not allow
  * enabling/disabling that emulation. These devices return zero in
@@ -4598,19 +4695,7 @@ libinput_device_config_middle_emulation_is_available(
  * button event. Releasing the buttons generates a middle mouse button
  * release, the left and right button events are discarded otherwise.
  *
- * The middle button release event may be generated when either button is
- * released, or when both buttons have been released. The exact behavior is
- * device-dependent.
- *
- * The middle button emulation behavior when combined with other device
- * buttons, including a physical middle button is device-dependent.
- * For example, @ref clickpad_softbuttons provides a middle button area when
- * middle button emulation is disabled. That middle button area disappears
- * when middle button emulation is enabled - a middle click can then only be
- * triggered by a simultaneous left + right click.
- *
- * @note Some devices provide middle mouse button emulation but do not allow
- * enabling/disabling that emulation.
+ * See @ref middle_button_emulation for details.
  *
  * @param device The device to configure
  * @param enable @ref LIBINPUT_CONFIG_MIDDLE_EMULATION_DISABLED to
@@ -4633,6 +4718,8 @@ libinput_device_config_middle_emulation_set_enabled(
  * @ingroup config
  *
  * Check if configurable middle button emulation is enabled on this device.
+ * See @ref middle_button_emulation for details.
+ *
  * If the device does not have configurable middle button emulation, this
  * function returns @ref LIBINPUT_CONFIG_MIDDLE_EMULATION_DISABLED.
  *
@@ -4657,7 +4744,9 @@ libinput_device_config_middle_emulation_get_enabled(
  * @ingroup config
  *
  * Check if configurable middle button emulation is enabled by default on
- * this device. If the device does not have configurable middle button
+ * this device. See @ref middle_button_emulation for details.
+ *
+ * If the device does not have configurable middle button
  * emulation, this function returns @ref
  * LIBINPUT_CONFIG_MIDDLE_EMULATION_DISABLED.
  *

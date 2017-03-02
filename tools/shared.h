@@ -24,6 +24,8 @@
 #ifndef _SHARED_H_
 #define _SHARED_H_
 
+#include <stdbool.h>
+
 #include <libinput.h>
 
 enum tools_backend {
@@ -36,6 +38,7 @@ struct tools_options {
 	const char *device; /* if backend is BACKEND_DEVICE */
 	const char *seat; /* if backend is BACKEND_UDEV */
 	int grab; /* EVIOCGRAB */
+	bool show_keycodes; /* show keycodes */
 
 	int verbose;
 	int tapping;
@@ -46,6 +49,7 @@ struct tools_options {
 	int middlebutton;
 	enum libinput_config_click_method click_method;
 	enum libinput_config_scroll_method scroll_method;
+	enum libinput_config_tap_button_map tap_map;
 	int scroll_button;
 	double speed;
 	int dwt;
@@ -62,6 +66,6 @@ int tools_parse_args(int argc, char **argv, struct tools_context *context);
 struct libinput* tools_open_backend(struct tools_context *context);
 void tools_device_apply_config(struct libinput_device *device,
 			       struct tools_options *options);
-void tools_usage();
+void tools_usage(void);
 
 #endif

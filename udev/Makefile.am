@@ -7,8 +7,15 @@ litest_rules = 80-libinput-device-groups-litest.rules \
 noinst_SCRIPTS = $(litest_rules)
 
 libinput_device_group_SOURCES = libinput-device-group.c
-libinput_device_group_CFLAGS = $(LIBUDEV_CFLAGS) $(GCC_CFLAGS)
+libinput_device_group_CFLAGS = -I$(top_srcdir)/src \
+			       $(LIBUDEV_CFLAGS) \
+			       $(GCC_CFLAGS)
 libinput_device_group_LDADD = $(LIBUDEV_LIBS)
+
+if HAVE_LIBWACOM_GET_PAIRED_DEVICE
+libinput_device_group_CFLAGS += $(LIBWACOM_CFLAGS)
+libinput_device_group_LDADD += $(LIBWACOM_LIBS)
+endif
 
 libinput_model_quirks_SOURCES = libinput-model-quirks.c
 libinput_model_quirks_CFLAGS = \
@@ -35,3 +42,11 @@ DISTCLEANFILES = \
 		 80-libinput-device-groups.rules \
 		 90-libinput-model-quirks.rules 
 EXTRA_DIST = 80-libinput-test-device.rules
+
+TEST_EXTENSIONS = .py
+
+if HAVE_PYTHON
+TESTS = parse_hwdb.py
+PY_LOG_COMPILER = $(PYTHON)
+endif
+EXTRA_DIST += parse_hwdb.py

@@ -46,6 +46,9 @@ http://cgit.freedesktop.org/wayland/libinput
 For a list of current and past releases visit:
 http://www.freedesktop.org/wiki/Software/libinput/
 
+Build instructions:
+http://wayland.freedesktop.org/libinput/doc/latest/building_libinput.html
+
 Reporting Bugs
 --------------
 
@@ -66,6 +69,16 @@ http://wayland.freedesktop.org/libinput/doc/latest/modules.html
 
 High-level documentation about libinput's features:
 http://wayland.freedesktop.org/libinput/doc/latest/pages.html
+
+Examples of how to use libinput are the debugging tools in the libinput
+repository. Developers are encouraged to look at those tools for a
+real-world (yet simple) example on how to use libinput.
+
+- A commandline debugging tool: https://cgit.freedesktop.org/wayland/libinput/tree/tools/event-debug.c
+- A GTK application that draws cursor/touch/tablet positions: https://cgit.freedesktop.org/wayland/libinput/tree/tools/event-gui.c
+
+Build instructions:
+http://wayland.freedesktop.org/libinput/doc/latest/building_libinput.html
 
 License
 -------

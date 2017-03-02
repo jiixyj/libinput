@@ -68,7 +68,7 @@ list_remove(struct list *elm)
 	elm->prev = NULL;
 }
 
-int
+bool
 list_empty(const struct list *list)
 {
 	return list->next == list;
@@ -179,13 +179,32 @@ parse_mouse_dpi_property(const char *prop)
 }
 
 /**
+ * Helper function to parse the MOUSE_WHEEL_CLICK_COUNT property from udev.
+ * Property is of the form:
+ * MOUSE_WHEEL_CLICK_COUNT=<integer>
+ * Where the number indicates the number of wheel clicks per 360 deg
+ * rotation.
+ *
+ * @param prop The value of the udev property (without the MOUSE_WHEEL_CLICK_COUNT=)
+ * @return The click count of the wheel (may be negative) or 0 on error.
+ */
+int
+parse_mouse_wheel_click_count_property(const char *prop)
+{
+	int count = 0;
+
+	if (!safe_atoi(prop, &count) || abs(count) > 360)
+		return 0;
+
+        return count;
+}
+
+/**
+ *
  * Helper function to parse the MOUSE_WHEEL_CLICK_ANGLE property from udev.
  * Property is of the form:
  * MOUSE_WHEEL_CLICK_ANGLE=<integer>
  * Where the number indicates the degrees travelled for each click.
- *
- * We skip preceding whitespaces and parse the first number seen. If
- * multiple numbers are specified, we ignore those.
  *
  * @param prop The value of the udev property (without the MOUSE_WHEEL_CLICK_ANGLE=)
  * @return The angle of the wheel (may be negative) or 0 on error.
@@ -193,16 +212,9 @@ parse_mouse_dpi_property(const char *prop)
 int
 parse_mouse_wheel_click_angle_property(const char *prop)
 {
-	int angle = 0,
-	    nread = 0;
+	int angle = 0;
 
-	while(*prop != 0 && *prop == ' ')
-		prop++;
-
-	sscanf(prop, "%d%n", &angle, &nread);
-	if (nread == 0 || angle == 0 || abs(angle) > 360)
-		return 0;
-	if (prop[nread] != ' ' && prop[nread] != '\0')
+	if (!safe_atoi(prop, &angle) || abs(angle) > 360)
 		return 0;
 
         return angle;
@@ -219,21 +231,10 @@ parse_mouse_wheel_click_angle_property(const char *prop)
 double
 parse_trackpoint_accel_property(const char *prop)
 {
-	locale_t c_locale;
 	double accel;
-	char *endp;
 
-	/* Create a "C" locale to force strtod to use '.' as separator */
-	c_locale = newlocale(LC_NUMERIC_MASK, "C", (locale_t)0);
-	if (c_locale == (locale_t)0)
-		return 0.0;
-
-	accel = strtod_l(prop, &endp, c_locale);
-
-	freelocale(c_locale);
-
-	if (*endp != '\0')
-		return 0.0;
+	if (!safe_atod(prop, &accel))
+		accel = 0.0;
 
 	return accel;
 }
@@ -266,4 +267,86 @@ parse_dimension_property(const char *prop, size_t *w, size_t *h)
 	*w = (size_t)x;
 	*h = (size_t)y;
 	return true;
+}
+
+/**
+ * Return the next word in a string pointed to by state before the first
+ * separator character. Call repeatedly to tokenize a whole string.
+ *
+ * @param state Current state
+ * @param len String length of the word returned
+ * @param separators List of separator characters
+ *
+ * @return The first word in *state, NOT null-terminated
+ */
+static const char *
+next_word(const char **state, size_t *len, const char *separators)
+{
+	const char *next = *state;
+	size_t l;
+
+	if (!*next)
+		return NULL;
+
+	next += strspn(next, separators);
+	if (!*next) {
+		*state = next;
+		return NULL;
+	}
+
+	l = strcspn(next, separators);
+	*state = next + l;
+	*len = l;
+
+	return next;
+}
+
+/**
+ * Return a null-terminated string array with the tokens in the input
+ * string, e.g. "one two\tthree" with a separator list of " \t" will return
+ * an array [ "one", "two", "three", NULL ].
+ *
+ * Use strv_free() to free the array.
+ *
+ * @param in Input string
+ * @param separators List of separator characters
+ *
+ * @return A null-terminated string array or NULL on errors
+ */
+char **
+strv_from_string(const char *in, const char *separators)
+{
+	const char *s, *word;
+	char **strv = NULL;
+	int nelems = 0, idx;
+	size_t l;
+
+	assert(in != NULL);
+
+	s = in;
+	while ((word = next_word(&s, &l, separators)) != NULL)
+	       nelems++;
+
+	if (nelems == 0)
+		return NULL;
+
+	nelems++; /* NULL-terminated */
+	strv = zalloc(nelems * sizeof *strv);
+	if (!strv)
+		return NULL;
+
+	idx = 0;
+
+	s = in;
+	while ((word = next_word(&s, &l, separators)) != NULL) {
+		char *copy = strndup(word, l);
+		if (!copy) {
+			strv_free(strv);
+			return NULL;
+		}
+
+		strv[idx++] = copy;
+	}
+
+	return strv;
 }

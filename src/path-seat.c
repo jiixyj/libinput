@@ -30,7 +30,7 @@
 #include <string.h>
 #include <libudev.h>
 
-#include "path.h"
+#include "path-seat.h"
 #include "evdev.h"
 
 static const char default_seat[] = "seat0";
@@ -171,6 +171,8 @@ path_device_enable(struct path_input *input,
 			 devnode);
 		goto out;
 	}
+
+	evdev_read_calibration_prop(device);
 
 out:
 	free(seat_name);

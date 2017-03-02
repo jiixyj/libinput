@@ -21,9 +21,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#if HAVE_CONFIG_H
 #include "config.h"
-#endif
 
 #include "litest.h"
 #include "litest-int.h"
@@ -55,7 +53,8 @@ static const char udev_rule[] =
 "KERNEL!=\"event*\", GOTO=\"wheel_click_angle_end\"\n"
 "\n"
 "ATTRS{name}==\"litest Wheel Click Angle Mouse*\",\\\n"
-"    ENV{MOUSE_WHEEL_CLICK_ANGLE}=\"-7\"\n"
+"    ENV{MOUSE_WHEEL_CLICK_ANGLE}=\"-7\",\\\n"
+"    ENV{MOUSE_WHEEL_CLICK_ANGLE_HORIZONTAL}=\"13\"\n"
 "\n"
 "LABEL=\"wheel_click_angle_end\"";
 

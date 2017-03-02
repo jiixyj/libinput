@@ -231,6 +231,10 @@ struct tp_dispatch {
 	bool semi_mt;
 	bool reports_distance;			/* does the device support true hovering */
 
+	/* true if we're reading events (i.e. not suspended) but we're
+	 * ignoring them */
+	bool ignore_events;
+
 	unsigned int num_slots;			/* number of slots */
 	unsigned int ntouches;			/* no slots inc. fakes */
 	struct tp_touch *touches;		/* len == ntouches */
@@ -242,11 +246,6 @@ struct tp_dispatch {
 	unsigned int fake_touches;
 
 	struct device_coords hysteresis_margin;
-
-	struct {
-		struct device_coords min, max;
-		struct ratelimit range_warn_limit;
-	} warning_range;
 
 	struct {
 		double x_scale_coeff;
@@ -322,6 +321,9 @@ struct tp_dispatch {
 		uint32_t buttons_pressed;
 		uint64_t first_press_time;
 
+		enum libinput_config_tap_button_map map;
+		enum libinput_config_tap_button_map want_map;
+
 		bool drag_enabled;
 		bool drag_lock_enabled;
 	} tap;
@@ -334,6 +336,7 @@ struct tp_dispatch {
 		struct libinput_event_listener trackpoint_listener;
 		struct libinput_timer trackpoint_timer;
 		uint64_t trackpoint_last_event_time;
+		uint32_t trackpoint_event_count;
 		bool monitor_trackpoint;
 	} palm;
 
@@ -351,6 +354,7 @@ struct tp_dispatch {
 		struct libinput_timer keyboard_timer;
 		struct evdev_device *keyboard;
 		unsigned long key_mask[NLONGS(KEY_CNT)];
+		unsigned long mod_mask[NLONGS(KEY_CNT)];
 
 		uint64_t keyboard_last_press_time;
 	} dwt;
@@ -384,7 +388,8 @@ tp_libinput_context(const struct tp_dispatch *tp)
 }
 
 static inline struct normalized_coords
-tp_normalize_delta(struct tp_dispatch *tp, struct device_float_coords delta)
+tp_normalize_delta(const struct tp_dispatch *tp,
+		   struct device_float_coords delta)
 {
 	struct normalized_coords normalized;
 
@@ -399,7 +404,8 @@ tp_normalize_delta(struct tp_dispatch *tp, struct device_float_coords delta)
  * in the x-axis' coordinate space.
  */
 static inline struct device_float_coords
-tp_unnormalize_for_xaxis(struct tp_dispatch *tp, struct normalized_coords delta)
+tp_unnormalize_for_xaxis(const struct tp_dispatch *tp,
+			 struct normalized_coords delta)
 {
 	struct device_float_coords raw;
 
@@ -422,19 +428,22 @@ tp_filter_motion_unaccelerated(struct tp_dispatch *tp,
 			       const struct normalized_coords *unaccelerated,
 			       uint64_t time);
 
-int
+bool
 tp_touch_active(const struct tp_dispatch *tp, const struct tp_touch *t);
 
 int
 tp_tap_handle_state(struct tp_dispatch *tp, uint64_t time);
 
-int
+void
+tp_tap_post_process_state(struct tp_dispatch *tp);
+
+void
 tp_init_tap(struct tp_dispatch *tp);
 
 void
 tp_remove_tap(struct tp_dispatch *tp);
 
-int
+void
 tp_init_buttons(struct tp_dispatch *tp, struct evdev_device *device);
 
 void
@@ -445,7 +454,7 @@ tp_init_top_softbuttons(struct tp_dispatch *tp,
 void
 tp_remove_buttons(struct tp_dispatch *tp);
 
-int
+void
 tp_process_button(struct tp_dispatch *tp,
 		  const struct input_event *e,
 		  uint64_t time);
@@ -457,10 +466,10 @@ tp_release_all_buttons(struct tp_dispatch *tp,
 int
 tp_post_button_events(struct tp_dispatch *tp, uint64_t time);
 
-int
+void
 tp_button_handle_state(struct tp_dispatch *tp, uint64_t time);
 
-int
+bool
 tp_button_touch_active(const struct tp_dispatch *tp,
 		       const struct tp_touch *t);
 
@@ -481,7 +490,7 @@ tp_tap_resume(struct tp_dispatch *tp, uint64_t time);
 bool
 tp_tap_dragging(const struct tp_dispatch *tp);
 
-int
+void
 tp_edge_scroll_init(struct tp_dispatch *tp, struct evdev_device *device);
 
 void
@@ -503,7 +512,7 @@ tp_edge_scroll_touch_active(const struct tp_dispatch *tp,
 uint32_t
 tp_touch_get_edge(const struct tp_dispatch *tp, const struct tp_touch *t);
 
-int
+void
 tp_init_gesture(struct tp_dispatch *tp);
 
 void

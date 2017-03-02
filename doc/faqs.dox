@@ -3,6 +3,8 @@
 
 Frequently asked questions about libinput.
 
+@tableofcontents
+
 @section faq_fast_mouse My mouse moves too fast, even at the slowest setting
 
 This is a symptom of high-dpi mice (greater than 1000dpi). These devices
@@ -40,12 +42,20 @@ manage these and decide which configuration option to apply to each device.
 This must be done at startup, after a resume and whenever a new device is
 detected.
 
-In a GNOME X.Org stack a user would usually toggle an option in
-the gnome-control-center which adjusts a gsettings entry. That change is
-picked up by gnome-settings-daemon and applied to the device by adjusting
-input device properties that the xf86-input-libinput driver provides.
-The input device property changes map to the respective libinput
-configuration options.
+One commonly used way to configure libinput is to have the Wayland
+compositor expose a compositor-specific configuration option. For example,
+in a GNOME stack, the gnome-control-center modifies dconf entries. These
+changes are read by mutter and applied to libinput. Changing these entries
+via the gsettings commandline tool has the same effect.
+
+Another commonly used way to configure libinput is to have xorg.conf.d
+snippets. When libinput is used with the xf86-input-libinput driver in an
+X.Org stack, these options are read on startup and apply to each device.
+Changing properties at runtime with the xinput commandline tool has the same
+effect.
+
+In both cases, the selection of available options and how they are exposed
+depends on the libinput caller (e.g. mutter or xf86-input-libinput).
 
 @dotfile libinput-stack-gnome.gv
 
@@ -53,6 +63,52 @@ This has an effect on the availability of configuration options: if an
 option is not exposed by the intermediary, it cannot be configured by the
 client. Also some configuration options that are provided by the
 intermediary may not be libinput-specific configuration options.
+
+@section faq_configure_wayland How do I configure my device on Wayland?
+
+See @ref faq_config_options Use the configuration tool provided by your
+desktop environment (e.g. gnome-control-center) or direct access to your
+desktop environment's configuration storage (e.g. gsettings).
+
+@section faq_configure_xorg How do I configure my device on X?
+
+See @ref faq_config_options  If your desktop environment does not provide a
+graphical configuration tool you can use an
+<a href="https://www.x.org/archive/current/doc/man/man5/xorg.conf.5.xhtml">xorg.conf.d snippet</a>.
+Usually, such a snippet looks like this:
+<pre>
+$> cat /etc/X11/xorg.conf.d/99-libinput-custom-config.conf
+Section "InputClass"
+  Identifier "something to identify this snippet"
+  MatchDriver "libinput"
+  MatchProduct "substring of the device name"
+  Option "some option name" "the option value"
+EndSection
+</pre>
+
+The identifier is merely a human-readable string that shows up in the log
+file. The MatchProduct line should contain the device name or a substring of
+the device name that the snippet should apply to. For a full list of option
+names and permitted values, see the
+<a href="https://www.mankier.com/4/libinput">libinput man page</a>.
+xorg.conf.d snippets like the above apply to hotplugged devices but can be
+overwritten at runtime by desktop tools. Multiple snippets may be placed
+into the same file.
+
+For run-time configuration and testing, the
+<a href="https://www.x.org/archive/X11R7.5/doc/man/man1/xinput.1.html">xinput</a>
+debugging tool can modify a devices' properties. See the
+<a href="https://www.mankier.com/4/libinput">libinput man page</a>
+for supported property names and values. Usually, an invocation looks like
+this:
+<pre>
+$> xinput set-prop "the device name" "the property name" value [value2] [value3]
+</pre>
+
+@note
+Changes performed by xinput do not persist across device hotplugs. xinput is
+considered a debugging and testing tool only and should not be used for
+permanent configurations.
 
 @section faq_hwdb_changes How to apply hwdb changes
 
@@ -74,7 +130,7 @@ commands below.
 
 Rebuild the hwdb and load the new set on your device:
 
-    sudo udevadm hwdb --reload
+    sudo udevadm hwdb --update
     sudo udevadm trigger /sys/class/input/eventX
     sudo udevadm test /sys/class/input/eventX
 

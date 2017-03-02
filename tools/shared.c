@@ -21,7 +21,6 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#define _GNU_SOURCE
 #include <config.h>
 
 #include <errno.h>
@@ -45,6 +44,7 @@ enum options {
 	OPT_VERBOSE,
 	OPT_TAP_ENABLE,
 	OPT_TAP_DISABLE,
+	OPT_TAP_MAP,
 	OPT_DRAG_ENABLE,
 	OPT_DRAG_DISABLE,
 	OPT_DRAG_LOCK_ENABLE,
@@ -62,8 +62,10 @@ enum options {
 	OPT_SCROLL_BUTTON,
 	OPT_SPEED,
 	OPT_PROFILE,
+	OPT_SHOW_KEYCODES,
 };
 
+LIBINPUT_ATTRIBUTE_PRINTF(3, 0)
 static void
 log_handler(struct libinput *li,
 	    enum libinput_log_priority priority,
@@ -74,7 +76,7 @@ log_handler(struct libinput *li,
 }
 
 void
-tools_usage()
+tools_usage(void)
 {
 	printf("Usage: %s [options] [--udev [<seat>]|--device /dev/input/event0]\n"
 	       "--udev <seat>.... Use udev device discovery (default).\n"
@@ -100,7 +102,9 @@ tools_usage()
 	       "--set-scroll-method=[none|twofinger|edge|button] ... set the desired scroll method\n"
 	       "--set-scroll-button=BTN_MIDDLE ... set the button to the given button code\n"
 	       "--set-profile=[adaptive|flat].... set pointer acceleration profile\n"
-	       "--set-speed=<value>.... set pointer acceleration speed\n"
+	       "--set-speed=<value>.... set pointer acceleration speed (allowed range [-1, 1]) \n"
+	       "--set-tap-map=[lrm|lmr] ... set button mapping for tapping\n"
+	       "--show-keycodes.... show all key codes while typing\n"
 	       "\n"
 	       "These options apply to all applicable devices, if a feature\n"
 	       "is not explicitly specified it is left at each device's default.\n"
@@ -121,6 +125,7 @@ tools_init_context(struct tools_context *context)
 
 	memset(options, 0, sizeof(*options));
 	options->tapping = -1;
+	options->tap_map = -1;
 	options->drag = -1;
 	options->drag_lock = -1;
 	options->natural_scroll = -1;
@@ -134,6 +139,7 @@ tools_init_context(struct tools_context *context)
 	options->seat = "seat0";
 	options->speed = 0.0;
 	options->profile = LIBINPUT_CONFIG_ACCEL_PROFILE_NONE;
+	options->show_keycodes = false;
 }
 
 int
@@ -168,7 +174,9 @@ tools_parse_args(int argc, char **argv, struct tools_context *context)
 			{ "set-scroll-method", 1, 0, OPT_SCROLL_METHOD },
 			{ "set-scroll-button", 1, 0, OPT_SCROLL_BUTTON },
 			{ "set-profile", 1, 0, OPT_PROFILE },
-			{ "speed", 1, 0, OPT_SPEED },
+			{ "set-tap-map", 1, 0, OPT_TAP_MAP },
+			{ "set-speed", 1, 0, OPT_SPEED },
+			{ "show-keycodes", 0, 0, OPT_SHOW_KEYCODES },
 			{ 0, 0, 0, 0}
 		};
 
@@ -205,6 +213,20 @@ tools_parse_args(int argc, char **argv, struct tools_context *context)
 			break;
 		case OPT_TAP_DISABLE:
 			options->tapping = 0;
+			break;
+		case OPT_TAP_MAP:
+			if (!optarg) {
+				tools_usage();
+				return 1;
+			}
+			if (streq(optarg, "lrm")) {
+				options->tap_map = LIBINPUT_CONFIG_TAP_MAP_LRM;
+			} else if (streq(optarg, "lmr")) {
+				options->tap_map = LIBINPUT_CONFIG_TAP_MAP_LMR;
+			} else {
+				tools_usage();
+				return 1;
+			}
 			break;
 		case OPT_DRAG_ENABLE:
 			options->drag = 1;
@@ -318,6 +340,9 @@ tools_parse_args(int argc, char **argv, struct tools_context *context)
 				tools_usage();
 				return 1;
 			}
+			break;
+		case OPT_SHOW_KEYCODES:
+			options->show_keycodes = true;
 			break;
 		default:
 			tools_usage();
@@ -451,6 +476,9 @@ tools_device_apply_config(struct libinput_device *device,
 {
 	if (options->tapping != -1)
 		libinput_device_config_tap_set_enabled(device, options->tapping);
+	if (options->tap_map != (enum libinput_config_tap_button_map)-1)
+		libinput_device_config_tap_set_button_map(device,
+							  options->tap_map);
 	if (options->drag != -1)
 		libinput_device_config_tap_set_drag_enabled(device,
 							    options->drag);
@@ -469,10 +497,10 @@ tools_device_apply_config(struct libinput_device *device,
 	if (options->dwt != -1)
 		libinput_device_config_dwt_set_enabled(device, options->dwt);
 
-	if (options->click_method != -1)
+	if (options->click_method != (enum libinput_config_click_method)-1)
 		libinput_device_config_click_set_method(device, options->click_method);
 
-	if (options->scroll_method != -1)
+	if (options->scroll_method != (enum libinput_config_scroll_method)-1)
 		libinput_device_config_scroll_set_method(device,
 							 options->scroll_method);
 	if (options->scroll_button != -1)

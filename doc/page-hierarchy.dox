@@ -17,6 +17,7 @@
 @page pointers Mice, Trackballs, etc.
 
 - @subpage motion_normalization
+- @subpage middle_button_emulation
 
 @page tablets Graphics Tablets
 
@@ -35,6 +36,11 @@
 
 @page developers Developers
 
+Contributions to libinput are always welcome. See the links below for
+specific documentation.
+
+- @subpage contributing
+- @subpage building_libinput
 - @subpage test-suite
 - @subpage tools
 - @subpage pointer-acceleration

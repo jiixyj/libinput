@@ -9,7 +9,8 @@
 #	90-libinput-model-quirks.rules
 #
 # Match string formats:
-#	libinput:<modalias>
+#	libinput:mouse:<modalias>
+#	libinput:touchpad:<modalias>
 #	libinput:name:<name>:dmi:<dmi string>
 #	libinput:name:<name>:fwversion:<version>
 #
@@ -40,6 +41,15 @@ libinput:name:*Apple Inc. Apple Internal Keyboard*:dmi:*
 libinput:mouse:input:b0005v05ACp030D*
  LIBINPUT_MODEL_APPLE_MAGICMOUSE=1
 
+libinput:touchpad:input:b0003v05ACp021A*
+ LIBINPUT_MODEL_APPLE_TOUCHPAD_ONEBUTTON=1
+
+##########################################
+# Asus
+##########################################
+libinput:name:*ETPS/2 Elantech Touchpad*:dmi:*svnASUSTeKCOMPUTERINC.:pnX555LAB:*
+ LIBINPUT_MODEL_TOUCHPAD_VISIBLE_MARKER=1
+
 ##########################################
 # Cyborg
 ##########################################
@@ -52,7 +62,7 @@ libinput:mouse:input:b0003v06A3p0CD5*
 ##########################################
 libinput:name:SynPS/2 Synaptics TouchPad:dmi:*svnDellInc.:*
 libinput:name:* Touchpad:dmi:*svnDellInc.:*
- LIBINPUT_MODEL_DELL_TOUCHPAD=1
+ LIBINPUT_MODEL_TOUCHPAD_VISIBLE_MARKER=1
 
 ##########################################
 # Elantech
@@ -85,6 +95,30 @@ libinput:name:Atmel maXTouch Touchpad:dmi:*svn*GOOGLE*:pn*Samus*
 
 libinput:name:Cypress APA Trackpad ?cyapa?:dmi:*
  LIBINPUT_MODEL_CYAPA=1
+
+##########################################
+# HP
+##########################################
+
+# HP Compaq6910p
+libinput:name:SynPS/2 Synaptics TouchPad:dmi:*svnHewlett-Packard:*pnHPCompaq6910p*
+ LIBINPUT_MODEL_HP6910_TOUCHPAD=1
+
+# HP Compaq 8510w
+libinput:name:SynPS/2 Synaptics TouchPad:dmi:*svnHewlett-Packard:*pnHPCompaq8510w*
+ LIBINPUT_MODEL_HP8510_TOUCHPAD=1
+
+# HP Pavillion dm4
+libinput:name:SynPS/2 Synaptics TouchPad:dmi:*svnHewlett-Packard:*pnHPPaviliondm4NotebookPC*
+ LIBINPUT_MODEL_HP_PAVILION_DM4_TOUCHPAD=1
+
+# HP Stream 11
+libinput:name:SYN1EDE:00 06CB:7442:dmi:*svnHewlett-Packard:pnHPStreamNotebookPC11*
+ LIBINPUT_MODEL_HP_STREAM11_TOUCHPAD=1
+
+# HP Zbook Studio G3
+libinput:name:AlpsPS/2 ALPS GlidePoint:dmi:*svnHP:pnHPZBookStudioG3:*
+ LIBINPUT_MODEL_HP_ZBOOK_STUDIO_G3=1
 
 ##########################################
 # LENOVO

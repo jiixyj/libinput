@@ -49,8 +49,11 @@ static unsigned int stop = 0;
 static void
 print_event_header(struct libinput_event *ev)
 {
+	/* use for pointer value only, do not dereference */
+	static void *last_device = NULL;
 	struct libinput_device *dev = libinput_event_get_device(ev);
 	const char *type = NULL;
+	char prefix;
 
 	switch(libinput_event_get_type(ev)) {
 	case LIBINPUT_EVENT_NONE:
@@ -132,7 +135,14 @@ print_event_header(struct libinput_event *ev)
 		break;
 	}
 
-	printf("%-7s	%-16s ", libinput_device_get_sysname(dev), type);
+	prefix = (last_device != dev) ? '-' : ' ';
+
+	printf("%c%-7s  %-16s ",
+	       prefix,
+	       libinput_device_get_sysname(dev),
+	       type);
+
+	last_device = dev;
 }
 
 static void
@@ -159,7 +169,7 @@ print_device_notify(struct libinput_event *ev)
 		libinput_device_group_set_user_data(group, (void*)group_id);
 	}
 
-	printf("%-33s %5s %7s group%d",
+	printf("%-33s %5s %7s group%-2d",
 	       libinput_device_get_name(dev),
 	       libinput_seat_get_physical_name(seat),
 	       libinput_seat_get_logical_name(seat),
@@ -186,7 +196,7 @@ print_device_notify(struct libinput_event *ev)
 		printf("P");
 
 	if (libinput_device_get_size(dev, &w, &h) == 0)
-		printf("\tsize %.2f/%.2fmm", w, h);
+		printf("  size %.0fx%.0fmm", w, h);
 
 	if (libinput_device_config_tap_get_finger_count(dev)) {
 	    printf(" tap");
@@ -251,20 +261,32 @@ print_device_notify(struct libinput_event *ev)
 }
 
 static void
-print_key_event(struct libinput_event *ev)
+print_key_event(struct libinput *li, struct libinput_event *ev)
 {
 	struct libinput_event_keyboard *k = libinput_event_get_keyboard_event(ev);
+	struct tools_context *context;
+	struct tools_options *options;
 	enum libinput_key_state state;
 	uint32_t key;
 	const char *keyname;
+
+	context = libinput_get_user_data(li);
+	options = &context->options;
 
 	print_event_time(libinput_event_keyboard_get_time(k));
 	state = libinput_event_keyboard_get_key_state(k);
 
 	key = libinput_event_keyboard_get_key(k);
-	keyname = libevdev_event_code_get_name(EV_KEY, key);
+	if (!options->show_keycodes &&
+	    (key >= KEY_ESC && key < KEY_ZENKAKUHANKAKU)) {
+		keyname = "***";
+		key = -1;
+	} else {
+		keyname = libevdev_event_code_get_name(EV_KEY, key);
+		keyname = keyname ? keyname : "???";
+	}
 	printf("%s (%d) %s\n",
-	       keyname ? keyname : "???",
+	       keyname,
 	       key,
 	       state == LIBINPUT_KEY_STATE_PRESSED ? "pressed" : "released");
 }
@@ -355,6 +377,19 @@ print_pointer_axis_event(struct libinput_event *ev)
 	double v = 0, h = 0;
 	const char *have_vert = "",
 		   *have_horiz = "";
+	const char *source = "invalid";
+
+	switch (libinput_event_pointer_get_axis_source(p)) {
+	case LIBINPUT_POINTER_AXIS_SOURCE_WHEEL:
+		source = "wheel";
+		break;
+	case LIBINPUT_POINTER_AXIS_SOURCE_FINGER:
+		source = "finger";
+		break;
+	case LIBINPUT_POINTER_AXIS_SOURCE_CONTINUOUS:
+		source = "continuous";
+		break;
+	}
 
 	if (libinput_event_pointer_has_axis(p,
 				LIBINPUT_POINTER_AXIS_SCROLL_VERTICAL)) {
@@ -369,7 +404,8 @@ print_pointer_axis_event(struct libinput_event *ev)
 		have_horiz = "*";
 	}
 	print_event_time(libinput_event_pointer_get_time(p));
-	printf("vert %.2f%s horiz %.2f%s\n", v, have_vert, h, have_horiz);
+	printf("vert %.2f%s horiz %.2f%s (%s)\n",
+	       v, have_vert, h, have_horiz, source);
 }
 
 static void
@@ -699,7 +735,7 @@ handle_and_print_events(struct libinput *li)
 						  &context.options);
 			break;
 		case LIBINPUT_EVENT_KEYBOARD_KEY:
-			print_key_event(ev);
+			print_key_event(li, ev);
 			break;
 		case LIBINPUT_EVENT_POINTER_MOTION:
 			print_motion_event(ev);

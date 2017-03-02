@@ -473,23 +473,57 @@ START_TEST(pointer_button_auto_release)
 }
 END_TEST
 
-static inline int
-wheel_click_angle(struct litest_device *dev)
+static inline double
+wheel_click_count(struct litest_device *dev, int which)
 {
 	struct udev_device *d;
-	const char *prop;
-	const int default_angle = 15;
-	int angle = default_angle;
+	const char *prop = NULL;
+	int count;
+	double angle = 0.0;
 
 	d = libinput_device_get_udev_device(dev->libinput_device);
 	litest_assert_ptr_notnull(d);
 
-	prop = udev_device_get_property_value(d, "MOUSE_WHEEL_CLICK_ANGLE");
+	if (which == REL_HWHEEL)
+		prop = udev_device_get_property_value(d, "MOUSE_WHEEL_CLICK_COUNT_HORIZONTAL");
+	if (!prop)
+		prop = udev_device_get_property_value(d, "MOUSE_WHEEL_CLICK_COUNT");
+	if (!prop)
+		goto out;
+
+	count = parse_mouse_wheel_click_count_property(prop);
+	angle = 360.0/count;
+
+out:
+	udev_device_unref(d);
+	return angle;
+}
+
+static inline double
+wheel_click_angle(struct litest_device *dev, int which)
+{
+	struct udev_device *d;
+	const char *prop = NULL;
+	const int default_angle = 15;
+	double angle;
+
+	angle = wheel_click_count(dev, which);
+	if (angle != 0.0)
+		return angle;
+
+	angle = default_angle;
+	d = libinput_device_get_udev_device(dev->libinput_device);
+	litest_assert_ptr_notnull(d);
+
+	if (which == REL_HWHEEL)
+		prop = udev_device_get_property_value(d, "MOUSE_WHEEL_CLICK_ANGLE_HORIZONTAL");
+	if (!prop)
+		prop = udev_device_get_property_value(d, "MOUSE_WHEEL_CLICK_ANGLE");
 	if (!prop)
 		goto out;
 
 	angle = parse_mouse_wheel_click_angle_property(prop);
-	if (angle == 0)
+	if (angle == 0.0)
 		angle = default_angle;
 
 out:
@@ -505,9 +539,9 @@ test_wheel_event(struct litest_device *dev, int which, int amount)
 	struct libinput_event_pointer *ptrev;
 	enum libinput_pointer_axis axis;
 
-	int scroll_step, expected, discrete;;
+	double scroll_step, expected, discrete;
 
-	scroll_step = wheel_click_angle(dev);
+	scroll_step = wheel_click_angle(dev, which);
 	expected = amount * scroll_step;
 	discrete = amount;
 
@@ -532,10 +566,12 @@ test_wheel_event(struct litest_device *dev, int which, int amount)
 				     axis,
 				     LIBINPUT_POINTER_AXIS_SOURCE_WHEEL);
 
-	litest_assert_int_eq(libinput_event_pointer_get_axis_value(ptrev, axis),
-			 expected);
-	litest_assert_int_eq(libinput_event_pointer_get_axis_value_discrete(ptrev, axis),
-			     discrete);
+	litest_assert_double_eq(
+			libinput_event_pointer_get_axis_value(ptrev, axis),
+			expected);
+	litest_assert_double_eq(
+			libinput_event_pointer_get_axis_value_discrete(ptrev, axis),
+			discrete);
 	libinput_event_destroy(event);
 }
 
@@ -737,6 +773,10 @@ START_TEST(pointer_left_handed_defaults)
 	struct litest_device *dev = litest_current_device();
 	struct libinput_device *d = dev->libinput_device;
 	int rc;
+
+	if (libevdev_get_id_vendor(dev->evdev) == VENDOR_ID_APPLE &&
+	    libevdev_get_id_product(dev->evdev) == PRODUCT_ID_APPLE_APPLETOUCH)
+		return;
 
 	rc = libinput_device_config_left_handed_is_available(d);
 	ck_assert_int_ne(rc, 0);
@@ -1026,7 +1066,7 @@ START_TEST(pointer_accel_defaults)
 				    speed);
 	}
 
-	for (speed = 1.2; speed <= -2.0; speed += 0.2) {
+	for (speed = 1.2; speed <= 2.0; speed += 0.2) {
 		status = libinput_device_config_accel_set_speed(device,
 								speed);
 		ck_assert_int_eq(status,
@@ -1723,7 +1763,7 @@ START_TEST(pointer_time_usec)
 END_TEST
 
 void
-litest_setup_tests(void)
+litest_setup_tests_pointer(void)
 {
 	struct range axis_range = {ABS_X, ABS_Y + 1};
 	struct range compass = {0, 7}; /* cardinal directions */

@@ -159,6 +159,7 @@ struct libinput_event_tablet_pad {
 	} strip;
 };
 
+LIBINPUT_ATTRIBUTE_PRINTF(3, 0)
 static void
 libinput_default_log_func(struct libinput *libinput,
 			  enum libinput_log_priority priority,
@@ -1554,7 +1555,7 @@ libinput_init(struct libinput *libinput,
 	assert(interface->open_restricted != NULL);
 	assert(interface->close_restricted != NULL);
 
-	libinput->epoll_fd = epoll_create1(EPOLL_CLOEXEC);;
+	libinput->epoll_fd = epoll_create1(EPOLL_CLOEXEC);
 	if (libinput->epoll_fd < 0)
 		return -1;
 
@@ -3031,6 +3032,16 @@ libinput_event_touch_get_base_event(struct libinput_event_touch *event)
 LIBINPUT_EXPORT struct libinput_event *
 libinput_event_gesture_get_base_event(struct libinput_event_gesture *event)
 {
+	require_event_type(libinput_event_get_context(&event->base),
+			   event->base.type,
+			   NULL,
+			   LIBINPUT_EVENT_GESTURE_SWIPE_BEGIN,
+			   LIBINPUT_EVENT_GESTURE_SWIPE_UPDATE,
+			   LIBINPUT_EVENT_GESTURE_SWIPE_END,
+			   LIBINPUT_EVENT_GESTURE_PINCH_BEGIN,
+			   LIBINPUT_EVENT_GESTURE_PINCH_UPDATE,
+			   LIBINPUT_EVENT_GESTURE_PINCH_END);
+
 	return &event->base;
 }
 
@@ -3349,6 +3360,42 @@ libinput_device_config_tap_get_default_enabled(struct libinput_device *device)
 		return LIBINPUT_CONFIG_TAP_DISABLED;
 
 	return device->config.tap->get_default(device);
+}
+
+LIBINPUT_EXPORT enum libinput_config_status
+libinput_device_config_tap_set_button_map(struct libinput_device *device,
+					    enum libinput_config_tap_button_map map)
+{
+	switch (map) {
+	case LIBINPUT_CONFIG_TAP_MAP_LRM:
+	case LIBINPUT_CONFIG_TAP_MAP_LMR:
+		break;
+	default:
+		return LIBINPUT_CONFIG_STATUS_INVALID;
+	}
+
+	if (libinput_device_config_tap_get_finger_count(device) == 0)
+		return LIBINPUT_CONFIG_STATUS_UNSUPPORTED;
+
+	return device->config.tap->set_map(device, map);
+}
+
+LIBINPUT_EXPORT enum libinput_config_tap_button_map
+libinput_device_config_tap_get_button_map(struct libinput_device *device)
+{
+	if (libinput_device_config_tap_get_finger_count(device) == 0)
+		return LIBINPUT_CONFIG_TAP_MAP_LRM;
+
+	return device->config.tap->get_map(device);
+}
+
+LIBINPUT_EXPORT enum libinput_config_tap_button_map
+libinput_device_config_tap_get_default_button_map(struct libinput_device *device)
+{
+	if (libinput_device_config_tap_get_finger_count(device) == 0)
+		return LIBINPUT_CONFIG_TAP_MAP_LRM;
+
+	return device->config.tap->get_default_map(device);
 }
 
 LIBINPUT_EXPORT enum libinput_config_status
